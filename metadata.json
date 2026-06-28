@@ -1,0 +1,6 @@
+{
+  "name": "Хүсэл-эрдэнэ - Танилцуулга",
+  "description": "Хүсэл-эрдэнэ-ийн хувийн сонирхол, мэдээлэл болон холбоо барих хэсэг бүхий үзэсгэлэнтэй танилцуулга вэб сайт.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
