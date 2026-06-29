@@ -102,7 +102,7 @@ async function startServer() {
       }));
 
       // Try multiple models in sequence to prevent 503 unavailable errors
-      const candidateModels = ["gemini-3.5-flash", "gemini-3.1-flash-lite", "gemini-flash-latest"];
+      const candidateModels = ["gemini-3.1-flash-lite", "gemini-flash-latest", "gemini-3.5-flash"];
       let response = null;
       let lastError = null;
 
