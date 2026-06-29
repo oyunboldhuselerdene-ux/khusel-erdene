@@ -5,9 +5,12 @@ import HomeSection from "./components/HomeSection";
 import GameSection from "./components/GameSection";
 import AboutSection from "./components/AboutSection";
 import ContactSection from "./components/ContactSection";
+import IdolCoachModal from "./components/IdolCoachModal";
+import MeAiAssistantPopup from "./components/MeAiAssistantPopup";
 
 export default function App() {
   const [activeSection, setActiveSection] = useState<string>("home");
+  const [isIdolCoachOpen, setIsIdolCoachOpen] = useState(false);
 
   const renderSection = () => {
     switch (activeSection) {
@@ -35,7 +38,11 @@ export default function App() {
       <div className="fixed top-0 left-0 w-full h-px bg-gradient-to-r from-transparent via-cyan-400/25 to-transparent z-40" />
       
       {/* Navigation Header (NO LOGO) */}
-      <Navbar currentSection={activeSection} onNavigate={setActiveSection} />
+      <Navbar 
+        currentSection={activeSection} 
+        onNavigate={setActiveSection} 
+        onOpenIdolCoach={() => setIsIdolCoachOpen(true)}
+      />
 
       {/* Main Content Area with Route Transitions */}
       <main className="flex-1 w-full flex flex-col justify-between overflow-hidden relative z-10">
@@ -60,6 +67,10 @@ export default function App() {
           <span>© 2026 IT ENGINEER PORTFOLIO // FROSTED GLASS THEME</span>
         </div>
       </footer>
+
+      {/* AI Assistants & Overlays */}
+      <IdolCoachModal isOpen={isIdolCoachOpen} onClose={() => setIsIdolCoachOpen(false)} />
+      <MeAiAssistantPopup />
     </div>
   );
 }

@@ -1,16 +1,18 @@
 import { motion } from "motion/react";
-import { Home, Gamepad2, User2, Mail, Terminal } from "lucide-react";
+import { Home, Gamepad2, User2, Mail, Terminal, Bot } from "lucide-react";
 
 interface NavbarProps {
   currentSection: string;
   onNavigate: (section: string) => void;
+  onOpenIdolCoach: () => void;
 }
 
-export default function Navbar({ currentSection, onNavigate }: NavbarProps) {
+export default function Navbar({ currentSection, onNavigate, onOpenIdolCoach }: NavbarProps) {
   const navItems = [
     { id: "home", label: "Нүүр хэсэг", icon: Home },
     { id: "game", label: "Тоглоомын хэсэг", icon: Gamepad2 },
     { id: "about", label: "Миний тухай", icon: User2 },
+    { id: "idol", label: "🤖 My Idol", icon: Bot, isAction: true },
     { id: "contact", label: "Холбоо барих", icon: Mail },
   ];
 
@@ -27,7 +29,13 @@ export default function Navbar({ currentSection, onNavigate }: NavbarProps) {
           return (
             <button
               key={item.id}
-              onClick={() => onNavigate(item.id)}
+              onClick={() => {
+                if (item.isAction) {
+                  onOpenIdolCoach();
+                } else {
+                  onNavigate(item.id);
+                }
+              }}
               className={`relative px-3.5 py-2 rounded-full font-display text-xs font-bold tracking-wider uppercase transition-all duration-300 flex items-center space-x-1.5 cursor-pointer ${
                 isActive 
                   ? "text-cyan-400 font-black" 
@@ -48,7 +56,7 @@ export default function Navbar({ currentSection, onNavigate }: NavbarProps) {
               
               <span className="relative z-10 hidden sm:inline">{item.label}</span>
               <span className="relative z-10 sm:hidden">
-                {item.id === "home" ? "Нүүр" : item.id === "game" ? "Тоглоом" : item.id === "about" ? "Тухай" : "Холбоо"}
+                {item.id === "home" ? "Нүүр" : item.id === "game" ? "Тоглоом" : item.id === "about" ? "Тухай" : item.id === "idol" ? "My Idol" : "Холбоо"}
               </span>
             </button>
           );
