@@ -435,6 +435,24 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
   const [showNamePrompt, setShowNamePrompt] = useState<boolean>(false);
   const [pendingCategory, setPendingCategory] = useState<keyof GameData | null>(null);
 
+  const fetchSharedLeaderboard = async () => {
+    try {
+      const response = await fetch("/api/leaderboard");
+      if (response.ok) {
+        const data = await response.json();
+        setLeaderboard(data);
+        localStorage.setItem("anime_guess_leaderboard", JSON.stringify(data));
+      }
+    } catch (e) {
+      console.error("Could not fetch shared leaderboard", e);
+    }
+  };
+
+  // Fetch shared leaderboard on active screen changes (e.g. entering home/launcher screen)
+  useEffect(() => {
+    fetchSharedLeaderboard();
+  }, [activeScreen]);
+
   // Load stats from localStorage on mount
   useEffect(() => {
     const storedHighScores = localStorage.getItem("anime_guess_high_scores");
@@ -636,13 +654,34 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
       timestamp: new Date().toLocaleDateString("mn-MN") + " " + new Date().toLocaleTimeString("mn-MN", { hour: "2-digit", minute: "2-digit" })
     };
 
-    setLeaderboard((prev) => {
-      const combined = [...prev, newEntry];
-      const sorted = combined.sort((a, b) => b.score - a.score);
-      const updated = sorted.slice(0, 15); // Keep top 15
-      localStorage.setItem("anime_guess_leaderboard", JSON.stringify(updated));
-      return updated;
-    });
+    fetch("/api/leaderboard", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: activeName,
+        score: computedScore,
+        category: selectedCategory,
+        timestamp: newEntry.timestamp
+      })
+    })
+      .then((res) => {
+        if (res.ok) return res.json();
+        throw new Error("Server response not ok");
+      })
+      .then((data) => {
+        setLeaderboard(data);
+        localStorage.setItem("anime_guess_leaderboard", JSON.stringify(data));
+      })
+      .catch((err) => {
+        console.error("Failed to sync leaderboard score with server:", err);
+        setLeaderboard((prev) => {
+          const combined = [...prev, newEntry];
+          const sorted = combined.sort((a, b) => b.score - a.score);
+          const updated = sorted.slice(0, 15); // Keep top 15
+          localStorage.setItem("anime_guess_leaderboard", JSON.stringify(updated));
+          return updated;
+        });
+      });
   };
 
   const resetStats = () => {
@@ -655,6 +694,18 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
     localStorage.removeItem("anime_guess_last_scores");
     localStorage.removeItem("anime_guess_total_points");
     localStorage.setItem("anime_guess_leaderboard", JSON.stringify(DEFAULT_LEADERBOARD));
+
+    fetch("/api/leaderboard/reset", { method: "POST" })
+      .then((res) => {
+        if (res.ok) return res.json();
+        throw new Error("Failed to reset leaderboard on server");
+      })
+      .then((data) => {
+        setLeaderboard(data);
+      })
+      .catch((err) => {
+        console.error("Failed to reset server leaderboard:", err);
+      });
   };
 
   const handleAnswerSelect = (option: string) => {

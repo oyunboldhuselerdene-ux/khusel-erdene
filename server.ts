@@ -1,10 +1,35 @@
 import express from "express";
 import path from "path";
 import dotenv from "dotenv";
+import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
 
 dotenv.config();
+
+const LEADERBOARD_FILE = path.join(process.cwd(), "leaderboard.json");
+
+function readLeaderboard(): any[] {
+  try {
+    if (fs.existsSync(LEADERBOARD_FILE)) {
+      const data = fs.readFileSync(LEADERBOARD_FILE, "utf-8");
+      return JSON.parse(data);
+    }
+  } catch (error) {
+    console.error("Error reading leaderboard file:", error);
+  }
+  return [];
+}
+
+function writeLeaderboard(data: any[]) {
+  try {
+    fs.writeFileSync(LEADERBOARD_FILE, JSON.stringify(data, null, 2), "utf-8");
+  } catch (error) {
+    console.error("Error writing leaderboard file:", error);
+  }
+}
+
+let cachedLeaderboard: any[] = readLeaderboard();
 
 async function startServer() {
   const app = express();
@@ -136,6 +161,53 @@ async function startServer() {
     } catch (error: any) {
       console.error("Error calling Gemini API:", error);
       return res.status(500).json({ error: error.message || "Internal server error" });
+    }
+  });
+
+  // GET: Retrieve shared leaderboard
+  app.get("/api/leaderboard", (req, res) => {
+    res.json(cachedLeaderboard);
+  });
+
+  // POST: Add score to shared leaderboard
+  app.post("/api/leaderboard", (req, res) => {
+    try {
+      const { name, score, category, timestamp } = req.body;
+      if (!name || score === undefined) {
+        return res.status(400).json({ error: "Name and score are required" });
+      }
+
+      const newEntry = {
+        id: Math.random().toString(36).substring(2, 11),
+        name: String(name).trim().substring(0, 16),
+        score: Number(score),
+        category: String(category || "emojiQuiz"),
+        timestamp: String(timestamp || new Date().toLocaleString())
+      };
+
+      cachedLeaderboard.push(newEntry);
+      // Sort descending by score
+      cachedLeaderboard.sort((a, b) => b.score - a.score);
+      // Keep top 100 entries
+      cachedLeaderboard = cachedLeaderboard.slice(0, 100);
+
+      writeLeaderboard(cachedLeaderboard);
+      res.json(cachedLeaderboard);
+    } catch (error) {
+      console.error("Error writing to leaderboard:", error);
+      res.status(500).json({ error: "Failed to save leaderboard score" });
+    }
+  });
+
+  // POST: Reset shared leaderboard
+  app.post("/api/leaderboard/reset", (req, res) => {
+    try {
+      cachedLeaderboard = [];
+      writeLeaderboard([]);
+      res.json([]);
+    } catch (error) {
+      console.error("Error resetting leaderboard:", error);
+      res.status(500).json({ error: "Failed to reset leaderboard" });
     }
   });
 
