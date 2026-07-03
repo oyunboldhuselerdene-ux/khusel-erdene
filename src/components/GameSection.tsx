@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Gamepad2, ArrowRight, Sparkles, Heart, Timer, Trophy, Zap, RefreshCw, 
-  Volume2, VolumeX, Flame, ChevronRight, User, Eye, X, Play
+  Volume2, VolumeX, Flame, ChevronRight, User, Eye, X, Play, Trash2
 } from "lucide-react";
 
 interface Question {
@@ -23,38 +23,48 @@ interface GameSectionProps {
   onNavigate: (section: string) => void;
 }
 
+interface LeaderboardEntry {
+  id: string;
+  name: string;
+  score: number;
+  category: keyof GameData;
+  timestamp: string;
+}
+
+const DEFAULT_LEADERBOARD: LeaderboardEntry[] = [];
+
 // Map of high quality anime themed image URLs from Unsplash for visual payoff
 const ANIME_IMAGES: Record<string, string> = {
   "One Piece": "https://m.media-amazon.com/images/M/MV5BMTNjNGU4NTUtYmVjMy00YjRiLTkxMWUtNzZkMDNiYjZhNmViXkEyXkFqcGc@._V1_FMjpg_UX1000_.jpg", 
-  "Naruto": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80",
+  "Naruto": "https://m.media-amazon.com/images/M/MV5BNTk3MDA1ZjAtNTRhYS00YzNiLTgwOGEtYWRmYTQ3NjA0NTAwXkEyXkFqcGc@._V1_FMjpg_UX1000_.jpg",
   "Demon Slayer": "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=600&auto=format&fit=crop&q=80",
-  "Death Note": "https://images.unsplash.com/photo-1627556704353-016ec933758a?w=600&auto=format&fit=crop&q=80",
-  "Attack on Titan": "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=600&auto=format&fit=crop&q=80",
-  "Fullmetal Alchemist": "https://images.unsplash.com/photo-1613376023733-0a73315d9b06?w=600&auto=format&fit=crop&q=80",
-  "Jujutsu Kaisen": "https://images.unsplash.com/photo-1608889175123-8ec330b86f84?w=600&auto=format&fit=crop&q=80",
-  "Dragon Ball": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80",
-  "Hunter x Hunter": "https://images.unsplash.com/photo-1563089145-599997674d42?w=600&auto=format&fit=crop&q=80",
-  "My Hero Academia": "https://images.unsplash.com/photo-1501183007986-d0d080b147f9?w=600&auto=format&fit=crop&q=80",
-  "Uzumaki Naruto": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80",
-  "Monkey D. Luffy": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80",
-  "Kamado Tanjiro": "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=600&auto=format&fit=crop&q=80",
-  "Levi Ackerman": "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=600&auto=format&fit=crop&q=80",
-  "Gojo Satoru": "https://images.unsplash.com/photo-1608889175123-8ec330b86f84?w=600&auto=format&fit=crop&q=80",
-  "Saitama": "https://images.unsplash.com/photo-1613376023733-0a73315d9b06?w=600&auto=format&fit=crop&q=80",
-  "Roronoa Zoro": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80",
-  "Light Yagami": "https://images.unsplash.com/photo-1627556704353-016ec933758a?w=600&auto=format&fit=crop&q=80",
-  "Edward Elric": "https://images.unsplash.com/photo-1613376023733-0a73315d9b06?w=600&auto=format&fit=crop&q=80",
-  "Gon Freecss": "https://images.unsplash.com/photo-1563089145-599997674d42?w=600&auto=format&fit=crop&q=80",
-  "Rasengan": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80",
-  "Gomu Gomu no Mi": "https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80",
-  "Kamehameha": "https://images.unsplash.com/photo-1534447677768-be436bb09401?w=600&auto=format&fit=crop&q=80",
-  "Chidori": "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=600&auto=format&fit=crop&q=80",
-  "Infinity (Limitless)": "https://images.unsplash.com/photo-1608889175123-8ec330b86f84?w=600&auto=format&fit=crop&q=80",
-  "Hinokami Kagura": "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=600&auto=format&fit=crop&q=80",
-  "Circleless Transmutation": "https://images.unsplash.com/photo-1613376023733-0a73315d9b06?w=600&auto=format&fit=crop&q=80",
-  "Thunder Breathing: First Form": "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=600&auto=format&fit=crop&q=80",
-  "Godspeed (Kanmuru)": "https://images.unsplash.com/photo-1563089145-599997674d42?w=600&auto=format&fit=crop&q=80",
-  "Founding Titan": "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=600&auto=format&fit=crop&q=80"
+  "Death Note": "https://m.media-amazon.com/images/M/MV5BYTgyZDhmMTEtZDFhNi00MTc4LTg3NjUtYWJlNGE5Mzk2NzMxXkEyXkFqcGc@._V1_QL75_UX190_CR0,2,190,281_.jpg",
+  "Attack on Titan": "https://m.media-amazon.com/images/M/MV5BZjliODY5MzQtMmViZC00MTZmLWFhMWMtMjMwM2I3OGY1MTRiXkEyXkFqcGc@._V1_FMjpg_UX1000_.jpg",
+  "Fullmetal Alchemist": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQCc85uII7t27diIuZbp0VQrWeHrea3SPlrsu7ik_AWkwsNqQfTLKxR9zXW&s=10",
+  "Jujutsu Kaisen": "https://m.media-amazon.com/images/M/MV5BMjBlNTExMDAtMWZjZi00MDc5LWFkMjgtZDU0ZWQ5ODk3YWY5XkEyXkFqcGc@._V1_.jpg",
+  "Dragon Ball": "https://m.media-amazon.com/images/M/MV5BNmFiM2FkYTYtY2FiOS00ZWJkLTkyOTgtNmFmODI4NjcwNDgzXkEyXkFqcGc@._V1_.jpg",
+  "Hunter x Hunter": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQPsSFwg5KHyr44lDoCQoUMTfG9Y1WhOezmB1H_3DHgF731bLgNe-dyloE&s=10",
+  "My Hero Academia": "https://m.media-amazon.com/images/M/MV5BY2QzODA5OTQtYWJlNi00ZjIzLThhNTItMDMwODhlYzYzMjA2XkEyXkFqcGc@._V1_.jpg",
+  "Uzumaki Naruto": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR5uZ0mo-J-P7fhspfZZnKBdjip-LAKo9VGI9nxD936Ow&s=10",
+  "Monkey D. Luffy": "https://static.beebom.com/wp-content/uploads/2025/01/Luffys-Hito-Hito-no-Mi-Model-Nika.jpg?w=1024",
+  "Kamado Tanjiro": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRA5rvgWnV-3cxSf10IAtjqrm3_VJDkZL7sZ9fjZ2A1-A&s",
+  "Levi Ackerman": "https://paintwaint.in/cdn/shop/files/Background-2025-06-21T151246.166.png?v=1750660060&width=1584",
+  "Gojo Satoru": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR0ydnSlVc4kz7X_q161uPpJOEM6q5IYuVobFnaYMFp67HC0y56jsEbuJk&s=10",
+  "Saitama": "https://static.wikia.nocookie.net/great-characters/images/2/27/Saitama.png/revision/latest?cb=20210824165554",
+  "Roronoa Zoro": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR-ZOYnPUj-HRvlPu8iGSQW9cQFlPG76oKXSSPSRuqBWA&s=10",
+  "Light Yagami": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcRtuZ3jjpbGd-Vulf73ZMHmV8hLm2u4xLINWSEDx-mrBw&s=10",
+  "Edward Elric": "https://static.wikitide.net/greatcharacterswiki/thumb/0/05/Ed_prof.png/869px-Ed_prof.png",
+  "Gon Freecss": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTVdM8dDmL1rq_uYWB-2Eck_o4p9ZzzP9q1HgXp9lz6sPrHJHgwrDEFgRk&s=10",
+  "Rasengan": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ3-p9K91d9cK0AFAeoM39cHZsLNvNUqQi7n1uiI3phLvYgIWfh2nQmXdxi&s=10",
+  "Gomu Gomu no Mi": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQH22byKsdoPqsMyUffvsD70JCUphVn926SnAtt2GFJ8w&s=10",
+  "Kamehameha": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSOCXBpJXDQNQ-T_UpcC7vyuyMj-v6yidHsyV_ns5s9HH3pXxtkP0uPEGA&s=10",
+  "Chidori": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSuXMc7mbaEZnsfJVYJgmn9U0CX4sqkObEWNGDSO-eQr2C6CfHusoCh-9Rx&s=10",
+  "Infinity (Limitless)": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSWolhB8UV2zqXp1iaAjtfTKpsxw8ZCiah4Cs06HsAZWhyBBIHcQV19DpQ&s=10",
+  "Hinokami Kagura": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQLCvOSoAc9mc8RL5KpheiaMlepnwe7xthr-ZbUdTExzy-OZUxanwW1mLF3&s=10",
+  "Circleless Transmutation": "https://i.sstatic.net/dmAaD.jpg",
+  "Thunder Breathing: First Form": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSCbr3GR38o4OZPwgLVPSrRyXZybu_Y6KOgRiHYW16-LR3CGM6mwxU-Kfu8&s=10",
+  "Godspeed (Kanmuru)": "https://i.pinimg.com/736x/6d/89/d8/6d89d8c0f1dbf2e17bc9ee8e578e20fa.jpg",
+  "Founding Titan": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSFFRA0yd-R0D3vzzx2gim5jY2hwLk9kmZP5_e-nUQA7g&s"
 };
 
 // Help match answers to core anime names for sound playing
@@ -406,6 +416,72 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
   // Core sound toggle
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
 
+  // Persistent user scores and statistics (saved to localStorage)
+  const [highScores, setHighScores] = useState<Record<string, number>>({
+    emojiQuiz: 0,
+    characterQuiz: 0,
+    powerQuiz: 0
+  });
+  const [lastScores, setLastScores] = useState<Record<string, number>>({
+    emojiQuiz: 0,
+    characterQuiz: 0,
+    powerQuiz: 0
+  });
+  const [totalAccumulatedPoints, setTotalAccumulatedPoints] = useState<number>(0);
+
+  // Player details and leaderboard states
+  const [playerName, setPlayerName] = useState<string>("");
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [showNamePrompt, setShowNamePrompt] = useState<boolean>(false);
+  const [pendingCategory, setPendingCategory] = useState<keyof GameData | null>(null);
+
+  // Load stats from localStorage on mount
+  useEffect(() => {
+    const storedHighScores = localStorage.getItem("anime_guess_high_scores");
+    if (storedHighScores) {
+      try {
+        setHighScores(JSON.parse(storedHighScores));
+      } catch (e) {
+        console.error("Could not parse high scores", e);
+      }
+    }
+    const storedLastScores = localStorage.getItem("anime_guess_last_scores");
+    if (storedLastScores) {
+      try {
+        setLastScores(JSON.parse(storedLastScores));
+      } catch (e) {
+        console.error("Could not parse last scores", e);
+      }
+    }
+    const storedTotal = localStorage.getItem("anime_guess_total_points");
+    if (storedTotal) {
+      setTotalAccumulatedPoints(parseInt(storedTotal, 10) || 0);
+    }
+
+    const storedName = localStorage.getItem("anime_guess_player_name");
+    if (storedName) {
+      setPlayerName(storedName);
+    } else {
+      setPlayerName("Шинэ Тоглогч");
+    }
+
+    const storedLeaderboard = localStorage.getItem("anime_guess_leaderboard");
+    if (storedLeaderboard) {
+      try {
+        const parsed = JSON.parse(storedLeaderboard);
+        const filtered = Array.isArray(parsed) ? parsed.filter((entry: any) => entry && entry.id && !entry.id.startsWith("def-")) : [];
+        setLeaderboard(filtered);
+        localStorage.setItem("anime_guess_leaderboard", JSON.stringify(filtered));
+      } catch (e) {
+        console.error("Could not parse leaderboard", e);
+        setLeaderboard(DEFAULT_LEADERBOARD);
+      }
+    } else {
+      setLeaderboard(DEFAULT_LEADERBOARD);
+      localStorage.setItem("anime_guess_leaderboard", JSON.stringify(DEFAULT_LEADERBOARD));
+    }
+  }, []);
+
   // Active game variables
   const [selectedCategory, setSelectedCategory] = useState<keyof GameData | null>(null);
   const [allGameData, setAllGameData] = useState<GameData>(FALLBACK_GAME_DATA);
@@ -512,6 +588,75 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
     setActiveScreen("playing");
   };
 
+  const handleCategoryClick = (category: keyof GameData) => {
+    triggerSound("click");
+    setPendingCategory(category);
+    setShowNamePrompt(true);
+  };
+
+  const saveResult = (finalRawScore: number, isVictory: boolean) => {
+    if (!selectedCategory) return;
+    
+    // Calculate final score with perfect score +10 bonus
+    const isPerfect = finalRawScore === 10;
+    const computedScore = (isVictory && isPerfect) ? finalRawScore + 10 : finalRawScore;
+
+    // 1. Update high scores
+    setHighScores((prev) => {
+      const currentHigh = prev[selectedCategory] || 0;
+      if (computedScore > currentHigh) {
+        const updated = { ...prev, [selectedCategory]: computedScore };
+        localStorage.setItem("anime_guess_high_scores", JSON.stringify(updated));
+        return updated;
+      }
+      return prev;
+    });
+
+    // 2. Update last scores
+    setLastScores((prev) => {
+      const updated = { ...prev, [selectedCategory]: computedScore };
+      localStorage.setItem("anime_guess_last_scores", JSON.stringify(updated));
+      return updated;
+    });
+
+    // 3. Update total accumulated points
+    setTotalAccumulatedPoints((prev) => {
+      const updated = prev + computedScore;
+      localStorage.setItem("anime_guess_total_points", updated.toString());
+      return updated;
+    });
+
+    // 4. Update leaderboard
+    const activeName = playerName.trim() || "Шинэ Тоглогч";
+    const newEntry: LeaderboardEntry = {
+      id: Math.random().toString(36).substring(2, 11),
+      name: activeName,
+      score: computedScore,
+      category: selectedCategory,
+      timestamp: new Date().toLocaleDateString("mn-MN") + " " + new Date().toLocaleTimeString("mn-MN", { hour: "2-digit", minute: "2-digit" })
+    };
+
+    setLeaderboard((prev) => {
+      const combined = [...prev, newEntry];
+      const sorted = combined.sort((a, b) => b.score - a.score);
+      const updated = sorted.slice(0, 15); // Keep top 15
+      localStorage.setItem("anime_guess_leaderboard", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const resetStats = () => {
+    const defaultScores = { emojiQuiz: 0, characterQuiz: 0, powerQuiz: 0 };
+    setHighScores(defaultScores);
+    setLastScores(defaultScores);
+    setTotalAccumulatedPoints(0);
+    setLeaderboard(DEFAULT_LEADERBOARD);
+    localStorage.removeItem("anime_guess_high_scores");
+    localStorage.removeItem("anime_guess_last_scores");
+    localStorage.removeItem("anime_guess_total_points");
+    localStorage.setItem("anime_guess_leaderboard", JSON.stringify(DEFAULT_LEADERBOARD));
+  };
+
   const handleAnswerSelect = (option: string) => {
     if (selectedAnswer !== null || showPayoutOverlay) return;
     const currentQ = currentQuestions[currentQuestionIndex];
@@ -544,6 +689,7 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
     if (lives <= 0) {
       setActiveScreen("gameover");
       triggerSound("lose");
+      saveResult(score, false);
     } else {
       advanceQuestion();
     }
@@ -560,6 +706,7 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
     } else {
       setActiveScreen("victory");
       triggerSound("win");
+      saveResult(score, true);
     }
   };
 
@@ -572,6 +719,14 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
 
   const currentQuestion = currentQuestions[currentQuestionIndex];
   const totalQuestionsCount = currentQuestions.length;
+
+  const getPlayerRank = (points: number) => {
+    if (points === 0) return { title: "Шинэ Тоглогч", emoji: "🆕", color: "text-slate-400 border-slate-500/20 bg-slate-500/5" };
+    if (points <= 20) return { title: "Сургуулиа Төгсөгч (Genin)", emoji: "🍥", color: "text-blue-400 border-blue-500/20 bg-blue-500/5" };
+    if (points <= 55) return { title: "Хашир Дайчин (Chunin)", emoji: "⚔️", color: "text-indigo-400 border-indigo-500/20 bg-indigo-500/5" };
+    if (points <= 100) return { title: "Домогт Баатар (Jonin)", emoji: "🔥", color: "text-purple-400 border-purple-500/20 bg-purple-500/5" };
+    return { title: "Аниме Сүнс (Hokage)", emoji: "👑", color: "text-amber-400 border-amber-500/20 bg-amber-500/5" };
+  };
 
   // Screen 1: Original high-fidelity launcher matching user screenshot exactly!
   const renderLauncher = () => (
@@ -595,59 +750,62 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
         </button>
       </div>
 
-      {/* Launcher Grid centered, displaying the single gorgeous card representing ANIME GUESS */}
-      <div className="flex justify-center items-center w-full pt-12 pb-16">
-        <motion.div 
-          whileHover={{ y: -8, scale: 1.02 }}
-          transition={{ type: "spring", stiffness: 300, damping: 20 }}
-          className="relative rounded-3xl w-full max-w-sm h-[400px] border-2 border-purple-500/60 shadow-[0_0_30px_rgba(168,85,247,0.4)] bg-gradient-to-b from-[#12072b] to-[#04010a] p-8 text-left flex flex-col justify-between overflow-hidden group cursor-pointer"
-          onClick={() => {
-            triggerSound("click");
-            setActiveScreen("anime-modes");
-          }}
-        >
-          {/* Aesthetic Anime Background Image inside card representing the Tracer cosplay in screenshot */}
-          <div 
-            className="absolute inset-0 bg-cover bg-center opacity-30 mix-blend-overlay group-hover:scale-105 transition-transform duration-700 ease-out" 
-            style={{ 
-              backgroundImage: `url('https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80')`
+      {/* Centered layout for single Game Selection Card */}
+      <div className="flex justify-center items-center w-full pt-8 pb-16 mx-auto">
+        {/* Interactive launcher card */}
+        <div className="flex justify-center items-center w-full max-w-sm">
+          <motion.div 
+            whileHover={{ y: -8, scale: 1.02 }}
+            transition={{ type: "spring", stiffness: 300, damping: 20 }}
+            className="relative rounded-3xl w-full h-[400px] border-2 border-purple-500/60 shadow-[0_0_30px_rgba(168,85,247,0.4)] bg-gradient-to-b from-[#12072b] to-[#04010a] p-8 text-left flex flex-col justify-between overflow-hidden group cursor-pointer"
+            onClick={() => {
+              triggerSound("click");
+              setActiveScreen("anime-modes");
             }}
-          />
-          
-          {/* Ambient overlays */}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#04010a] via-transparent to-transparent" />
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(168,85,247,0.25),transparent_70%)] pointer-events-none" />
-          <div className="absolute bottom-[-10px] left-[-10px] w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-purple-500/15 transition-colors duration-300" />
-          
-          {/* Floating anime icons inside card decoration */}
-          <div className="absolute right-6 top-1/3 text-4xl opacity-20 rotate-12 select-none font-sans group-hover:rotate-6 transition-transform duration-300">
-            🍥 👒 ⚔️
-          </div>
-
-          <div className="space-y-1 z-10">
-            <span className="text-cyan-400 font-mono text-[10px] font-bold tracking-widest uppercase">
-              TRIVIA QUIZ
-            </span>
-            <h3 className="font-sans text-3xl font-extrabold text-white tracking-tight leading-none mt-1">
-              ANIME<br/>GUESS
-            </h3>
-          </div>
-
-          {/* Bottom active Play button */}
-          <div className="flex justify-between items-end z-10">
-            <span className="text-[10px] font-mono text-purple-400">3 АНГИЛАЛ // 100% ОФЛАЙН</span>
-            <div className="w-12 h-12 bg-purple-600 group-hover:bg-purple-500 text-white rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all duration-300 transform group-hover:scale-110">
-              <Play size={20} className="fill-white translate-x-[1px]" />
+          >
+            {/* Aesthetic Anime Background Image inside card representing the Tracer cosplay in screenshot */}
+            <div 
+              className="absolute inset-0 bg-cover bg-center opacity-30 mix-blend-overlay group-hover:scale-105 transition-transform duration-700 ease-out" 
+              style={{ 
+                backgroundImage: `url('https://images.unsplash.com/photo-1607604276583-eef5d076aa5f?w=600&auto=format&fit=crop&q=80')`
+              }}
+            />
+            
+            {/* Ambient overlays */}
+            <div className="absolute inset-0 bg-gradient-to-t from-[#04010a] via-transparent to-transparent" />
+            <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(168,85,247,0.25),transparent_70%)] pointer-events-none" />
+            <div className="absolute bottom-[-10px] left-[-10px] w-48 h-48 bg-purple-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-purple-500/15 transition-colors duration-300" />
+            
+            {/* Floating anime icons inside card decoration */}
+            <div className="absolute right-6 top-1/3 text-4xl opacity-20 rotate-12 select-none font-sans group-hover:rotate-6 transition-transform duration-300">
+              🍥 👒 ⚔️
             </div>
-          </div>
-        </motion.div>
+
+            <div className="space-y-1 z-10">
+              <span className="text-cyan-400 font-mono text-[10px] font-bold tracking-widest uppercase">
+                TRIVIA QUIZ
+              </span>
+              <h3 className="font-sans text-3xl font-extrabold text-white tracking-tight leading-none mt-1">
+                ANIME<br/>GUESS
+              </h3>
+            </div>
+
+            {/* Bottom active Play button */}
+            <div className="flex justify-between items-end z-10">
+              <span className="text-[10px] font-mono text-purple-400">3 АНГИЛАЛ // 100% ОФЛАЙН</span>
+              <div className="w-12 h-12 bg-purple-600 group-hover:bg-purple-500 text-white rounded-full flex items-center justify-center shadow-[0_0_15px_rgba(168,85,247,0.5)] transition-all duration-300 transform group-hover:scale-110">
+                <Play size={20} className="fill-white translate-x-[1px]" />
+              </div>
+            </div>
+          </motion.div>
+        </div>
       </div>
     </div>
   );
 
   // Screen 2: Select category inside Anime Guess
   const renderAnimeModes = () => (
-    <div className="w-full max-w-5xl flex flex-col space-y-8 px-4 py-8">
+    <div className="w-full max-w-7xl flex flex-col space-y-8 px-4 py-8">
       {/* Top Header */}
       <div className="flex justify-between items-center border-b border-white/5 pb-6">
         <div>
@@ -686,116 +844,222 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
         </div>
       </div>
 
-      {/* Rules Info banner */}
-      <div className="bg-gradient-to-r from-purple-500/10 via-pink-500/5 to-transparent border border-purple-500/10 rounded-2xl p-6 flex flex-col md:flex-row gap-4 items-center">
-        <div className="p-3 bg-purple-400/10 border border-purple-400/20 rounded-2xl text-purple-400 animate-pulse">
-          <Flame size={28} />
+      {/* Main Grid: Game Selection on the left, Stats & Leaderboard on the right */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 w-full items-start">
+        {/* Left column: Game Selection & Rules (lg:col-span-8) */}
+        <div className="lg:col-span-8 space-y-6">
+          {/* Rules Info banner */}
+          <div className="bg-gradient-to-r from-purple-500/10 via-pink-500/5 to-transparent border border-purple-500/10 rounded-2xl p-5 flex flex-col md:flex-row gap-4 items-center">
+            <div className="p-3 bg-purple-400/10 border border-purple-400/20 rounded-2xl text-purple-400 animate-pulse">
+              <Flame size={24} />
+            </div>
+            <div className="text-left space-y-1">
+              <h4 className="font-sans text-xs font-semibold text-white tracking-wide">ТОГЛООМЫН ДҮРЭМ // RULES</h4>
+              <p className="text-slate-400 font-sans text-[11px] leading-relaxed">
+                ⏱️ ХУГАЦАА: Асуулт бүрт <strong>30 секунд</strong> байна. ❤️ АМЬ: Та <strong>5 амьтай</strong> эхлэх ба буруу хариулбал 1 амь хасагдана. ⭐ BONUS: Хэрэв бүх 10 асуултанд алдалгүй зөв хариулбал <strong>+10 бонус оноо</strong> авна!
+              </p>
+            </div>
+          </div>
+
+          {/* Grid containing the 3 segments */}
+          <div className="grid grid-cols-1 gap-4 w-full">
+            
+            {/* Card 1: EMOJI QUIZ */}
+            <motion.div 
+              whileHover={{ y: -4, scale: 1.01 }}
+              className="relative rounded-2xl border border-white/10 hover:border-purple-500/30 bg-gradient-to-r from-[#13062c] to-[#04010a] p-5 text-left flex flex-col sm:flex-row items-center sm:items-stretch justify-between gap-4 overflow-hidden group cursor-pointer"
+              onClick={() => handleCategoryClick("emojiQuiz")}
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(168,85,247,0.1),transparent_70%)] pointer-events-none" />
+              <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-3 sm:space-y-0 sm:space-x-4 z-10 w-full min-w-0">
+                <div className="w-12 h-12 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center justify-center text-purple-400 flex-shrink-0">
+                  <Sparkles size={20} />
+                </div>
+                <div className="text-center sm:text-left min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                    <span className="text-purple-400 font-mono text-[9px] font-bold tracking-widest uppercase block">SECTION 01</span>
+                    {highScores.emojiQuiz > 0 && (
+                      <span className="inline-flex self-center px-1.5 py-0.5 bg-purple-500/15 border border-purple-500/20 text-purple-300 font-mono text-[8px] rounded-full items-center space-x-1 mt-1 sm:mt-0">
+                        <Trophy size={8} />
+                        <span>РЕКОРД: {highScores.emojiQuiz}</span>
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="font-sans text-lg font-extrabold text-white tracking-tight mt-1">
+                    Эможи Таавар
+                  </h3>
+                  <p className="text-slate-400 font-sans text-[11px] mt-1 leading-relaxed max-w-md">
+                    Алдартай анимены нэрсийг сонирхолтой хөгжилтэй эможинуудаар илэрхийлснийг тааж тоглоорой!
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center sm:justify-end justify-center z-10 w-full sm:w-auto">
+                <div className="w-10 h-10 border border-white/10 group-hover:border-purple-400 group-hover:text-purple-400 text-slate-400 rounded-full flex items-center justify-center transition-all duration-300">
+                  <Play size={12} className="translate-x-[1px] fill-current" />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Card 2: CHARACTER QUIZ */}
+            <motion.div 
+              whileHover={{ y: -4, scale: 1.01 }}
+              className="relative rounded-2xl border border-white/10 hover:border-indigo-500/30 bg-gradient-to-r from-[#060c2c] to-[#01020a] p-5 text-left flex flex-col sm:flex-row items-center sm:items-stretch justify-between gap-4 overflow-hidden group cursor-pointer"
+              onClick={() => handleCategoryClick("characterQuiz")}
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.1),transparent_70%)] pointer-events-none" />
+              <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-3 sm:space-y-0 sm:space-x-4 z-10 w-full min-w-0">
+                <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-center justify-center text-indigo-400 flex-shrink-0">
+                  <User size={20} />
+                </div>
+                <div className="text-center sm:text-left min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                    <span className="text-indigo-400 font-mono text-[9px] font-bold tracking-widest uppercase block">SECTION 02</span>
+                    {highScores.characterQuiz > 0 && (
+                      <span className="inline-flex self-center px-1.5 py-0.5 bg-indigo-500/15 border border-indigo-500/20 text-indigo-300 font-mono text-[8px] rounded-full items-center space-x-1 mt-1 sm:mt-0">
+                        <Trophy size={8} />
+                        <span>РЕКОРД: {highScores.characterQuiz}</span>
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="font-sans text-lg font-extrabold text-white tracking-tight mt-1">
+                    Дүр Таах Хэсэг
+                  </h3>
+                  <p className="text-slate-400 font-sans text-[11px] mt-1 leading-relaxed max-w-md">
+                    Анимены алдартай дүрүүдийг тэдгээрийн онцлог шинж чанар, эможи тайлбараар таагаарай.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center sm:justify-end justify-center z-10 w-full sm:w-auto">
+                <div className="w-10 h-10 border border-white/10 group-hover:border-indigo-400 group-hover:text-indigo-400 text-slate-400 rounded-full flex items-center justify-center transition-all duration-300">
+                  <Play size={12} className="translate-x-[1px] fill-current" />
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Card 3: POWER QUIZ */}
+            <motion.div 
+              whileHover={{ y: -4, scale: 1.01 }}
+              className="relative rounded-2xl border border-white/10 hover:border-pink-500/30 bg-gradient-to-r from-[#240618] to-[#0a0105] p-5 text-left flex flex-col sm:flex-row items-center sm:items-stretch justify-between gap-4 overflow-hidden group cursor-pointer"
+              onClick={() => handleCategoryClick("powerQuiz")}
+            >
+              <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(236,72,153,0.1),transparent_70%)] pointer-events-none" />
+              <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-3 sm:space-y-0 sm:space-x-4 z-10 w-full min-w-0">
+                <div className="w-12 h-12 bg-pink-500/10 border border-pink-500/20 rounded-2xl flex items-center justify-center text-pink-400 flex-shrink-0">
+                  <Eye size={20} />
+                </div>
+                <div className="text-center sm:text-left min-w-0">
+                  <div className="flex flex-col sm:flex-row sm:items-center sm:gap-3">
+                    <span className="text-pink-400 font-mono text-[9px] font-bold tracking-widest uppercase block">SECTION 03</span>
+                    {highScores.powerQuiz > 0 && (
+                      <span className="inline-flex self-center px-1.5 py-0.5 bg-pink-500/15 border border-pink-500/20 text-pink-300 font-mono text-[8px] rounded-full items-center space-x-1 mt-1 sm:mt-0">
+                        <Trophy size={8} />
+                        <span>РЕКОРД: {highScores.powerQuiz}</span>
+                      </span>
+                    )}
+                  </div>
+                  <h3 className="font-sans text-lg font-extrabold text-white tracking-tight mt-1">
+                    Хүч & Чадвар Таах Хэсэг
+                  </h3>
+                  <p className="text-slate-400 font-sans text-[11px] mt-1 leading-relaxed max-w-md">
+                    Дүрүүдийн ашигладаг тусгай техникийн нэршил, тэсрэлттэй онцгой хүчнүүдийг тааж шалгаарай.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center sm:justify-end justify-center z-10 w-full sm:w-auto">
+                <div className="w-10 h-10 border border-white/10 group-hover:border-pink-400 group-hover:text-pink-400 text-slate-400 rounded-full flex items-center justify-center transition-all duration-300">
+                  <Play size={12} className="translate-x-[1px] fill-current" />
+                </div>
+              </div>
+            </motion.div>
+
+          </div>
         </div>
-        <div className="text-left space-y-1">
-          <h4 className="font-sans text-sm font-semibold text-white tracking-wide">ТОГЛООМЫН ДҮРЭМ // RULES</h4>
-          <p className="text-slate-400 font-sans text-xs leading-relaxed">
-            ⏱️ ХУГАЦАА: Асуулт бүрт <strong>30 секунд</strong> байна. ❤️ АМЬ: Та <strong>5 амьтай</strong> эхлэх ба буруу хариулбал 1 амь хасагдана. ⭐ ОНОО: Зөв хариулт тутамд <strong>1 оноо</strong>. 🔥 BONUS: Хэрэв бүх 10 асуултанд алдалгүй зөв хариулбал <strong>+10 бонус оноо</strong> авна!
-          </p>
+
+        {/* Right column: Leaderboard only (lg:col-span-4) */}
+        <div className="lg:col-span-4 space-y-6">
+          {/* Leaderboard Panel (nested name-based leaderboard) */}
+          <div className="relative rounded-2xl border border-white/10 bg-gradient-to-b from-slate-900/90 to-slate-950 p-6 text-left flex flex-col justify-between overflow-hidden shadow-xl">
+            <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff03_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
+            <div className="absolute top-0 right-0 w-32 h-32 bg-pink-500/5 rounded-full blur-3xl pointer-events-none" />
+
+            <div className="space-y-4 z-10 w-full">
+              <div className="flex justify-between items-center">
+                <span className="text-pink-400 font-mono text-[10px] font-bold tracking-widest uppercase block">
+                  ТОГЛОГЧДЫН ЧАНСАА // LEADERBOARD
+                </span>
+                <div className="flex items-center space-x-2">
+                  {leaderboard.length > 0 && (
+                    <button
+                      onClick={() => {
+                        if (confirm("Та чансааны бүх мэдээллийг устгахдаа итгэлтэй байна уу?")) {
+                          resetStats();
+                          triggerSound("click");
+                        }
+                      }}
+                      className="p-1 hover:bg-rose-500/15 text-slate-500 hover:text-rose-400 rounded transition-colors cursor-pointer"
+                      title="Чансаа устгах // Reset Records"
+                    >
+                      <Trash2 size={12} />
+                    </button>
+                  )}
+                  <Trophy size={14} className="text-pink-400 animate-pulse" />
+                </div>
+              </div>
+
+              <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1 custom-scrollbar">
+                {leaderboard.length === 0 ? (
+                  <div className="text-center py-10 px-4 text-slate-500 text-xs font-sans border border-dashed border-white/5 rounded-xl">
+                    <p className="mb-1 text-sm text-slate-400">📭 Чансаа хоосон байна.</p>
+                    <p className="opacity-70">Тоглоом тоглож, өөрийн рекордоо хамгийн эхэнд бүртгүүлээрэй!</p>
+                  </div>
+                ) : (
+                  leaderboard.map((entry, index) => {
+                    const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `${index + 1}`;
+                    const isCurrentUser = entry.name.toLowerCase() === playerName.toLowerCase();
+                    return (
+                      <div 
+                        key={entry.id} 
+                        className={`flex items-center justify-between p-2 rounded-xl border text-[11px] transition-all duration-300 ${
+                          isCurrentUser 
+                            ? "bg-purple-500/15 border-purple-500/40 text-purple-200 shadow-[0_0_10px_rgba(168,85,247,0.1)]" 
+                            : "bg-white/[0.01] border-white/5 hover:border-white/10"
+                        }`}
+                      >
+                        <div className="flex items-center space-x-2 min-w-0">
+                          <span className={`w-5 h-5 flex items-center justify-center font-mono text-[9px] rounded-full flex-shrink-0 ${
+                            index === 0 ? "bg-amber-400/20 text-amber-400 border border-amber-400/30" : 
+                            index === 1 ? "bg-slate-300/20 text-slate-300 border border-slate-300/30" : 
+                            index === 2 ? "bg-amber-700/20 text-amber-600 border border-amber-600/30" : 
+                            "text-slate-500 border border-transparent"
+                          }`}>
+                            {medal}
+                          </span>
+                          <div className="min-w-0">
+                            <span className="font-sans font-bold text-white block truncate">{entry.name}</span>
+                            <span className="text-[8px] font-mono text-slate-500 truncate block">
+                              {categoryTitles[entry.category] || "Таавар"}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          <span className="font-mono font-bold text-amber-400 text-xs block">{entry.score} <span className="text-[8px] text-slate-500 font-normal">оноо</span></span>
+                          <span className="text-[8px] font-mono text-slate-600 block">{entry.timestamp.split(" ")[0]}</span>
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-
-      {/* Grid containing the 3 segments exactly as requested */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full pt-4">
-        
-        {/* Card 1: EMOJI QUIZ */}
-        <motion.div 
-          whileHover={{ y: -6 }}
-          className="relative rounded-3xl h-[380px] border border-white/10 hover:border-purple-500/30 bg-gradient-to-b from-[#13062c] to-[#04010a] p-6 text-left flex flex-col justify-between overflow-hidden group cursor-pointer"
-          onClick={() => startQuiz("emojiQuiz")}
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(168,85,247,0.15),transparent_70%)] pointer-events-none" />
-          <div className="space-y-4 z-10">
-            <div className="w-12 h-12 bg-purple-500/10 border border-purple-500/20 rounded-2xl flex items-center justify-center text-purple-400">
-              <Sparkles size={22} />
-            </div>
-            <div>
-              <span className="text-purple-400 font-mono text-[9px] font-bold tracking-widest uppercase">SECTION 01</span>
-              <h3 className="font-sans text-2xl font-extrabold text-white tracking-tight mt-1">
-                Эможи<br/>Таавар
-              </h3>
-              <p className="text-slate-400 font-sans text-xs mt-3 leading-relaxed">
-                Алдартай анимены нэрсийг сонирхолтой хөгжилтэй эможинуудаар илэрхийлсэн байгааг тааж тоглоорой!
-              </p>
-            </div>
-          </div>
-
-          <div className="flex justify-between items-end z-10">
-            <span className="text-[10px] font-mono text-slate-500">10 АСУУЛТ // EMOJI QUIZ</span>
-            <div className="w-10 h-10 border border-white/10 hover:border-purple-400 hover:text-purple-400 text-slate-400 rounded-full flex items-center justify-center transition-all duration-300">
-              <Play size={14} className="translate-x-[1px] fill-current" />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Card 2: CHARACTER QUIZ */}
-        <motion.div 
-          whileHover={{ y: -6 }}
-          className="relative rounded-3xl h-[380px] border border-white/10 hover:border-indigo-500/30 bg-gradient-to-b from-[#060c2c] to-[#01020a] p-6 text-left flex flex-col justify-between overflow-hidden group cursor-pointer"
-          onClick={() => startQuiz("characterQuiz")}
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(59,130,246,0.15),transparent_70%)] pointer-events-none" />
-          <div className="space-y-4 z-10">
-            <div className="w-12 h-12 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-center justify-center text-indigo-400">
-              <User size={22} />
-            </div>
-            <div>
-              <span className="text-indigo-400 font-mono text-[9px] font-bold tracking-widest uppercase">SECTION 02</span>
-              <h3 className="font-sans text-2xl font-extrabold text-white tracking-tight mt-1">
-                Дүр<br/>Таах хэсэг
-              </h3>
-              <p className="text-slate-400 font-sans text-xs mt-3 leading-relaxed">
-                Анимены алдартай дүрүүдийг тэдгээрийн онцлог шинж чанар, хэрэглэдэг зэвсэг бүхий эможи тайлбараар таагаарай.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex justify-between items-end z-10">
-            <span className="text-[10px] font-mono text-slate-500">10 АСУУЛТ // CHARACTER QUIZ</span>
-            <div className="w-10 h-10 border border-white/10 hover:border-indigo-400 hover:text-indigo-400 text-slate-400 rounded-full flex items-center justify-center transition-all duration-300">
-              <Play size={14} className="translate-x-[1px] fill-current" />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Card 3: POWER QUIZ */}
-        <motion.div 
-          whileHover={{ y: -6 }}
-          className="relative rounded-3xl h-[380px] border border-white/10 hover:border-pink-500/30 bg-gradient-to-b from-[#240618] to-[#0a0105] p-6 text-left flex flex-col justify-between overflow-hidden group cursor-pointer"
-          onClick={() => startQuiz("powerQuiz")}
-        >
-          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,rgba(236,72,153,0.15),transparent_70%)] pointer-events-none" />
-          <div className="space-y-4 z-10">
-            <div className="w-12 h-12 bg-pink-500/10 border border-pink-500/20 rounded-2xl flex items-center justify-center text-pink-400">
-              <Eye size={22} />
-            </div>
-            <div>
-              <span className="text-pink-400 font-mono text-[9px] font-bold tracking-widest uppercase">SECTION 03</span>
-              <h3 className="font-sans text-2xl font-extrabold text-white tracking-tight mt-1">
-                Хүч & Чадвар<br/>Таах хэсэг
-              </h3>
-              <p className="text-slate-400 font-sans text-xs mt-3 leading-relaxed">
-                Дүрүүдийн ашигладаг тусгай техникийн нэршил, тэсрэлттэй онцгой хүчнүүдийг тайлбараар дамжуулан тааж шалгаарай.
-              </p>
-            </div>
-          </div>
-
-          <div className="flex justify-between items-end z-10">
-            <span className="text-[10px] font-mono text-slate-500">10 АСУУЛТ // POWER QUIZ</span>
-            <div className="w-10 h-10 border border-white/10 hover:border-pink-400 hover:text-pink-400 text-slate-400 rounded-full flex items-center justify-center transition-all duration-300">
-              <Play size={14} className="translate-x-[1px] fill-current" />
-            </div>
-          </div>
-        </motion.div>
-
       </div>
 
       {/* Redirect bottom flow button */}
-      <div className="flex justify-center pt-8">
+      <div className="flex justify-center pt-4">
         <button 
           onClick={() => onNavigate("contact")}
           className="group relative px-8 py-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 text-white rounded-2xl font-sans text-xs font-semibold tracking-wider transition-all duration-300 flex items-center space-x-3 cursor-pointer"
@@ -1055,6 +1319,9 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
           <button 
             onClick={() => {
               triggerSound("click");
+              if (score > 0) {
+                saveResult(score, false);
+              }
               setActiveScreen("anime-modes");
             }}
             className="text-slate-500 hover:text-slate-300 font-mono text-[10px] tracking-widest flex items-center space-x-2 transition-colors cursor-pointer"
@@ -1211,6 +1478,99 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
           {activeScreen === "gameover" && renderGameOver()}
           {activeScreen === "victory" && renderVictory()}
         </motion.div>
+      </AnimatePresence>
+
+      {/* High-fidelity Name Input Modal overlay */}
+      <AnimatePresence>
+        {showNamePrompt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.3 }}
+              className="bg-slate-900 border border-purple-500/30 rounded-3xl p-6 md:p-8 max-w-md w-full space-y-6 shadow-[0_0_50px_rgba(168,85,247,0.25)] relative overflow-hidden"
+            >
+              {/* Decorative grid backdrop */}
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff02_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
+              <div className="absolute -top-12 -right-12 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
+
+              <div className="space-y-2 relative z-10">
+                <span className="text-purple-400 font-mono text-[9px] font-bold tracking-widest uppercase">
+                  ТОГЛОГЧИЙН НЭР ОРУУЛАХ
+                </span>
+                <h3 className="font-sans text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                  <User className="text-purple-400" size={20} />
+                  <span>ТА ХЭН БЭ? // ENTER NAME</span>
+                </h3>
+                <p className="text-slate-400 font-sans text-xs leading-relaxed">
+                  Та өөрийн нэрийг оруулна уу. Таны авсан оноо, рекорд амжилтууд энэ нэрээр **Leaderboard** дээр бүртгэгдэх болно!
+                </p>
+              </div>
+
+              <div className="space-y-2 relative z-10">
+                <label className="text-[10px] font-mono text-slate-500 uppercase tracking-widest block">НЭР // PLAYER NAME</label>
+                <input
+                  type="text"
+                  maxLength={16}
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder="Жишээ: Zoro_Otaku"
+                  className="w-full bg-white/[0.03] border border-white/10 hover:border-purple-500/40 focus:border-purple-500 focus:outline-none rounded-2xl py-3.5 px-4 text-white font-sans text-sm transition-all duration-300"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && playerName.trim()) {
+                      const finalName = playerName.trim();
+                      setPlayerName(finalName);
+                      localStorage.setItem("anime_guess_player_name", finalName);
+                      if (pendingCategory) {
+                        startQuiz(pendingCategory);
+                      }
+                      setShowNamePrompt(false);
+                    }
+                  }}
+                />
+                <div className="flex justify-between items-center text-[9px] font-mono text-slate-500">
+                  <span>*Тэмдэгтүүд: Хамгийн ихдээ 16</span>
+                  <span>{playerName.length}/16 тэмдэгт</span>
+                </div>
+              </div>
+
+              <div className="flex gap-3 relative z-10 pt-2">
+                <button
+                  onClick={() => {
+                    triggerSound("click");
+                    setShowNamePrompt(false);
+                  }}
+                  className="flex-1 py-3.5 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white rounded-2xl font-semibold text-xs tracking-wider transition-all duration-300 border border-white/5 cursor-pointer text-center"
+                >
+                  ЦУЦЛАХ // BACK
+                </button>
+                <button
+                  onClick={() => {
+                    triggerSound("click");
+                    const finalName = playerName.trim() || "Отаку";
+                    setPlayerName(finalName);
+                    localStorage.setItem("anime_guess_player_name", finalName);
+                    if (pendingCategory) {
+                      startQuiz(pendingCategory);
+                    }
+                    setShowNamePrompt(false);
+                  }}
+                  disabled={!playerName.trim()}
+                  className="flex-1 py-3.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-40 text-white rounded-2xl font-bold text-xs tracking-widest uppercase transition-all duration-300 shadow-[0_4px_15px_rgba(168,85,247,0.3)] hover:scale-[1.01] cursor-pointer text-center"
+                >
+                  ЭХЛЭХ // PLAY ➔
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
     </div>
   );
