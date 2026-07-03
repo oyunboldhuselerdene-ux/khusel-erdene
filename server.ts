@@ -29,7 +29,7 @@ function writeLeaderboard(data: any[]) {
   }
 }
 
-let cachedLeaderboard: any[] = readLeaderboard();
+let cachedLeaderboard: any[] = readLeaderboard().sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
 
 async function startServer() {
   const app = express();
@@ -188,8 +188,8 @@ async function startServer() {
       cachedLeaderboard.push(newEntry);
       // Sort descending by score
       cachedLeaderboard.sort((a, b) => b.score - a.score);
-      // Keep top 100 entries
-      cachedLeaderboard = cachedLeaderboard.slice(0, 100);
+      // Keep top 1000 entries so player records are safely retained
+      cachedLeaderboard = cachedLeaderboard.slice(0, 1000);
 
       writeLeaderboard(cachedLeaderboard);
       res.json(cachedLeaderboard);

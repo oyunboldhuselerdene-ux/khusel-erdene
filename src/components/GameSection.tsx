@@ -1039,7 +1039,7 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
             <div className="space-y-4 z-10 w-full">
               <div className="flex justify-between items-center">
                 <span className="text-pink-400 font-mono text-[10px] font-bold tracking-widest uppercase block">
-                  ТОГЛОГЧДЫН ЧАНСАА // LEADERBOARD
+                  ШИЛДЭГ 10 ТОГЛОГЧ // TOP 10 PLAYERS
                 </span>
                 <div className="flex items-center space-x-2">
                   {leaderboard.length > 0 && (
@@ -1067,7 +1067,7 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
                     <p className="opacity-70">Тоглоом тоглож, өөрийн рекордоо хамгийн эхэнд бүртгүүлээрэй!</p>
                   </div>
                 ) : (
-                  leaderboard.map((entry, index) => {
+                  leaderboard.slice(0, 10).map((entry, index) => {
                     const medal = index === 0 ? "🥇" : index === 1 ? "🥈" : index === 2 ? "🥉" : `${index + 1}`;
                     const isCurrentUser = entry.name.toLowerCase() === playerName.toLowerCase();
                     return (
