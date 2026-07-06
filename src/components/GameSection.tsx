@@ -2,7 +2,8 @@ import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { 
   Gamepad2, ArrowRight, Sparkles, Heart, Timer, Trophy, Zap, RefreshCw, 
-  Volume2, VolumeX, Flame, ChevronRight, User, Eye, X, Play, Trash2
+  Volume2, VolumeX, Flame, ChevronRight, User, Eye, X, Play, Trash2,
+  Music, Pause
 } from "lucide-react";
 
 interface Question {
@@ -85,6 +86,24 @@ const getAnimeNameFromAnswer = (answer: string): string => {
 
 // Declare a global reference for the active anime theme sound context so we can stop it on demand
 let activeThemeContext: AudioContext | null = null;
+let activeAudioElement: HTMLAudioElement | null = null;
+
+// Curated collection of high quality, stable, and public original anime theme MP3 files from Archive.org
+const ANIME_MP3_URLS: Record<string, string> = {
+  "Naruto": "https://archive.org/download/naruto-shippuden-opening-3-blue-bird-mp-3-160-k/Naruto%20Shippuden%20Opening%203%20_%20Blue%20Bird%28MP3_160K%29.mp3",
+  "One Piece": "https://archive.org/download/tvtunes_20333/One%20Piece%20-%20We%20Are%20-%20Full.mp3",
+  "Demon Slayer": "https://archive.org/download/gurenge/gurenge.mp3",
+  "Dragon Ball": "https://archive.org/download/dbz-hsc-01-ongatesen-flac/01.%20CHA-LA%20HEAD-CHA-LA.mp3",
+  "Attack on Titan": "https://archive.org/download/guren-no-yumiya/Guren%20no%20Yumiya.mp3",
+  "Death Note": "https://archive.org/download/nightmare-the-world/Nightmare%20-%20the%20WORLD.mp3",
+  "Jujutsu Kaisen": "https://archive.org/download/jujutsu-kaisen-op-1-eve-kaikai-kitan/Jujutsu%20Kaisen%20OP%201%20-%E3%80%8EEve%20-%20Kaikai%20Kitan%E3%80%8F.mp3",
+  "Fullmetal Alchemist": "https://archive.org/download/tvtunes_17740/Fullmetal%20Alchemist%20-%20Brotherhood%20-%20Again.mp3",
+  "Hunter x Hunter": "https://archive.org/download/tvtunes_29284/Hunter%20X%20Hunter%20-%202011%20-%20Opening%20-%20Full.mp3",
+  "My Hero Academia": "https://archive.org/download/musica_202602/01%20-%20THE%20DAY%20%5BBoku%20no%20Hero%20Academia%20Opening%5D.mp3"
+};
+
+// Callback to sync audio player with React component state
+let onThemeSongStateChange: ((state: { playing: boolean; loading: boolean }) => void) | null = null;
 
 export const stopAnimeTheme = () => {
   if (activeThemeContext) {
@@ -97,14 +116,22 @@ export const stopAnimeTheme = () => {
     }
     activeThemeContext = null;
   }
+  if (activeAudioElement) {
+    try {
+      activeAudioElement.pause();
+      activeAudioElement.src = "";
+      activeAudioElement.load();
+    } catch (e) {
+      console.warn("Could not stop activeAudioElement", e);
+    }
+    activeAudioElement = null;
+  }
+  onThemeSongStateChange?.({ playing: false, loading: false });
 };
 
-// Play short synthesized version of iconic theme songs using Web Audio API
-const playAnimeTheme = (answer: string, enabled: boolean) => {
-  if (!enabled) return;
+// Play a soft, beautiful, and pleasant chime as a modern fallback instead of annoying repetitive beep-beeps
+const playSyntheticTheme = (animeName: string) => {
   try {
-    stopAnimeTheme(); // Stop any currently playing theme before starting a new one!
-
     const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
     if (!AudioContextClass) return;
     const ctx = new AudioContextClass();
@@ -117,7 +144,7 @@ const playAnimeTheme = (answer: string, enabled: boolean) => {
       osc.type = type;
       osc.frequency.setValueAtTime(freq, start);
       
-      gain.gain.setValueAtTime(0.08, start);
+      gain.gain.setValueAtTime(0.04, start); // Soft volume
       gain.gain.exponentialRampToValueAtTime(0.001, start + duration - 0.02);
       
       osc.connect(gain);
@@ -127,171 +154,67 @@ const playAnimeTheme = (answer: string, enabled: boolean) => {
     };
 
     const now = ctx.currentTime;
-    const animeName = getAnimeNameFromAnswer(answer);
-
-    if (animeName === "Naruto") {
-      // Silhouette theme hook: A4 (440), C5 (523), D5 (587), E5 (659), D5 (587), C5 (523), A4 (440)
-      const notes = [
-        { f: 440, d: 0.22 },
-        { f: 523, d: 0.22 },
-        { f: 587, d: 0.22 },
-        { f: 659, d: 0.45 },
-        { f: 587, d: 0.22 },
-        { f: 523, d: 0.22 },
-        { f: 440, d: 0.5 },
-      ];
-      let time = now;
-      notes.forEach((n) => {
-        playNote(n.f, time, n.d, "triangle");
-        time += n.d;
-      });
-    } else if (animeName === "One Piece") {
-      // We Are! theme hook: G4 (392), G4 (392), A4 (440), B4 (494), B4 (494), C5 (523), D5 (587)
-      const notes = [
-        { f: 392, d: 0.18 },
-        { f: 392, d: 0.18 },
-        { f: 440, d: 0.18 },
-        { f: 494, d: 0.28 },
-        { f: 494, d: 0.18 },
-        { f: 523, d: 0.18 },
-        { f: 587, d: 0.45 },
-      ];
-      let time = now;
-      notes.forEach((n) => {
-        playNote(n.f, time, n.d, "sine");
-        time += n.d;
-      });
-    } else if (animeName === "Demon Slayer") {
-      // Gurenge theme: B4 (494), B4 (494), B4 (494), A4 (440), B4 (494), D5 (587), B4 (494), A4 (440), G4 (392)
-      const notes = [
-        { f: 494, d: 0.18 },
-        { f: 494, d: 0.18 },
-        { f: 494, d: 0.18 },
-        { f: 440, d: 0.18 },
-        { f: 494, d: 0.18 },
-        { f: 587, d: 0.28 },
-        { f: 494, d: 0.18 },
-        { f: 440, d: 0.18 },
-        { f: 392, d: 0.4 },
-      ];
-      let time = now;
-      notes.forEach((n) => {
-        playNote(n.f, time, n.d, "sawtooth");
-        time += n.d;
-      });
-    } else if (animeName === "Dragon Ball") {
-      // Cha-La Head-Cha-La hook: E4 (329), G#4 (415), B4 (494), E5 (659), D#5 (622), B4 (494)
-      const notes = [
-        { f: 329, d: 0.18 },
-        { f: 415, d: 0.18 },
-        { f: 494, d: 0.18 },
-        { f: 659, d: 0.38 },
-        { f: 622, d: 0.28 },
-        { f: 494, d: 0.4 },
-      ];
-      let time = now;
-      notes.forEach((n) => {
-        playNote(n.f, time, n.d, "sine");
-        time += n.d;
-      });
-    } else if (animeName === "Attack on Titan") {
-      // Guren no Yumiya brass hook: E4 (329), G4 (392), A4 (440), B4 (494), C5 (523), B4 (494), A4 (440)
-      const notes = [
-        { f: 329, d: 0.22 },
-        { f: 392, d: 0.22 },
-        { f: 440, d: 0.45 },
-        { f: 494, d: 0.22 },
-        { f: 523, d: 0.22 },
-        { f: 494, d: 0.22 },
-        { f: 440, d: 0.45 },
-      ];
-      let time = now;
-      notes.forEach((n) => {
-        playNote(n.f, time, n.d, "triangle");
-        time += n.d;
-      });
-    } else if (animeName === "Death Note") {
-      // Dramatic gothic bells hook: A4 (440), D5 (587), F5 (698), E5 (659), C#5 (554), D5 (587)
-      const notes = [
-        { f: 440, d: 0.25 },
-        { f: 587, d: 0.25 },
-        { f: 698, d: 0.25 },
-        { f: 659, d: 0.25 },
-        { f: 554, d: 0.25 },
-        { f: 587, d: 0.5 },
-      ];
-      let time = now;
-      notes.forEach((n) => {
-        playNote(n.f, time, n.d, "sawtooth");
-        time += n.d;
-      });
-    } else if (animeName === "Jujutsu Kaisen") {
-      // Kaikai Kitan hook: C#4 (277), E4 (329), F#4 (370), G#4 (415), B4 (494), C#5 (554)
-      const notes = [
-        { f: 277, d: 0.18 },
-        { f: 329, d: 0.18 },
-        { f: 370, d: 0.18 },
-        { f: 415, d: 0.18 },
-        { f: 494, d: 0.18 },
-        { f: 554, d: 0.45 },
-      ];
-      let time = now;
-      notes.forEach((n) => {
-        playNote(n.f, time, n.d, "sine");
-        time += n.d;
-      });
-    } else if (animeName === "Fullmetal Alchemist") {
-      // Again (YUI) hook: F4 (349), G4 (392), G#4 (415), A#4 (466), C5 (523)
-      const notes = [
-        { f: 349, d: 0.18 },
-        { f: 392, d: 0.18 },
-        { f: 415, d: 0.18 },
-        { f: 466, d: 0.18 },
-        { f: 523, d: 0.5 },
-      ];
-      let time = now;
-      notes.forEach((n) => {
-        playNote(n.f, time, n.d, "triangle");
-        time += n.d;
-      });
-    } else if (animeName === "Hunter x Hunter") {
-      // Departure hook: C4 (261), E4 (329), G4 (392), C5 (523), B4 (494), G4 (392)
-      const notes = [
-        { f: 261, d: 0.22 },
-        { f: 329, d: 0.22 },
-        { f: 392, d: 0.22 },
-        { f: 523, d: 0.45 },
-        { f: 494, d: 0.22 },
-        { f: 392, d: 0.45 },
-      ];
-      let time = now;
-      notes.forEach((n) => {
-        playNote(n.f, time, n.d, "sine");
-        time += n.d;
-      });
-    } else if (animeName === "My Hero Academia") {
-      // The Day hook: D4 (293), F4 (349), G4 (392), A4 (440), C5 (523)
-      const notes = [
-        { f: 293, d: 0.18 },
-        { f: 349, d: 0.18 },
-        { f: 392, d: 0.18 },
-        { f: 440, d: 0.18 },
-        { f: 523, d: 0.5 },
-      ];
-      let time = now;
-      notes.forEach((n) => {
-        playNote(n.f, time, n.d, "sawtooth");
-        time += n.d;
-      });
-    } else {
-      // Fallback melody
-      const notes = [440, 494, 523, 587];
-      notes.forEach((freq, idx) => {
-        playNote(freq, now + idx * 0.1, 0.2, "sine");
-      });
-    }
+    // Beautiful, gentle major triad arpeggio (C5 - E5 - G5)
+    playNote(523.25, now, 0.3, "sine");
+    playNote(659.25, now + 0.1, 0.3, "sine");
+    playNote(783.99, now + 0.2, 0.4, "sine");
   } catch (e) {
     console.warn("Web Audio blocked.", e);
+  }
+};
+
+// Play either the authentic full MP3 song or fall back seamlessly to a soft chime
+const playAnimeTheme = (answer: string, enabled: boolean) => {
+  if (!enabled) return;
+  try {
+    stopAnimeTheme(); // Stop any currently active music first!
+
+    const animeName = getAnimeNameFromAnswer(answer);
+    const mp3Url = ANIME_MP3_URLS[animeName];
+
+    if (mp3Url) {
+      onThemeSongStateChange?.({ playing: false, loading: true });
+      const audio = new Audio();
+      audio.src = mp3Url;
+      audio.volume = 0.35; // Set beautiful background volume
+      activeAudioElement = audio;
+
+      audio.onplaying = () => {
+        onThemeSongStateChange?.({ playing: true, loading: false });
+      };
+
+      audio.onpause = () => {
+        onThemeSongStateChange?.({ playing: false, loading: false });
+      };
+
+      audio.onended = () => {
+        onThemeSongStateChange?.({ playing: false, loading: false });
+      };
+
+      audio.onerror = (e) => {
+        console.warn(`Original MP3 load error for ${animeName}. Falling back to soft chime.`, e);
+        onThemeSongStateChange?.({ playing: false, loading: false });
+        playSyntheticTheme(animeName);
+      };
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log(`Now playing authentic background theme song for ${animeName}`);
+          })
+          .catch((err) => {
+            console.warn(`Autoplay blocked for original MP3 of ${animeName}. Falling back to soft chime.`, err);
+            onThemeSongStateChange?.({ playing: false, loading: false });
+            playSyntheticTheme(animeName);
+          });
+      }
+    } else {
+      playSyntheticTheme(animeName);
+    }
+  } catch (err) {
+    console.warn("Could not play anime theme", err);
+    onThemeSongStateChange?.({ playing: false, loading: false });
   }
 };
 
@@ -415,6 +338,38 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
 
   // Core sound toggle
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+
+  // Theme song states
+  const [themeSongPlaying, setThemeSongPlaying] = useState<boolean>(false);
+  const [themeSongLoading, setThemeSongLoading] = useState<boolean>(false);
+
+  // Sync state changes with the global audio handlers
+  useEffect(() => {
+    onThemeSongStateChange = (state) => {
+      setThemeSongPlaying(state.playing);
+      setThemeSongLoading(state.loading);
+    };
+    return () => {
+      onThemeSongStateChange = null;
+    };
+  }, []);
+
+  const toggleThemeSong = () => {
+    if (activeAudioElement) {
+      if (activeAudioElement.paused) {
+        activeAudioElement.play().catch((err) => {
+          console.warn("Manual play blocked", err);
+        });
+      } else {
+        activeAudioElement.pause();
+      }
+    } else {
+      const currentQ = currentQuestions[currentQuestionIndex];
+      if (currentQ) {
+        playAnimeTheme(currentQ.answer, true); // force enable for manual click
+      }
+    }
+  };
 
   // Persistent user scores and statistics (saved to localStorage)
   const [highScores, setHighScores] = useState<Record<string, number>>({
@@ -1320,17 +1275,82 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
                 {/* Overlay with equalizer */}
                 <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 to-transparent p-4 flex items-center justify-between">
                   <div className="flex items-center space-x-1.5 bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full border border-white/10 text-[9px] font-mono text-purple-300">
-                    <span className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-ping" />
-                    <span>АЯ ТОГЛОЖ БАЙНА</span>
+                    <span className={`w-1.5 h-1.5 rounded-full ${themeSongPlaying ? "bg-[#00E676] animate-ping" : "bg-slate-500"}`} />
+                    <span>
+                      {themeSongPlaying 
+                        ? "ОРИГИНАЛ АЯ ТОГЛОЖ БАЙНА" 
+                        : themeSongLoading 
+                        ? "АЯЫГ УНШИЖ БАЙНА..." 
+                        : "ОРИГИНАЛ АЯ ТОГЛООГҮЙ"}
+                    </span>
                   </div>
                   
                   {/* Equalizer lines */}
-                  <div className="flex items-end space-x-0.5 h-3">
-                    <div className="w-0.5 bg-purple-400 h-2 animate-[pulse_0.6s_infinite]" />
-                    <div className="w-0.5 bg-pink-400 h-3 animate-[pulse_0.4s_infinite_0.1s]" />
-                    <div className="w-0.5 bg-amber-400 h-1.5 animate-[pulse_0.8s_infinite_0.2s]" />
-                    <div className="w-0.5 bg-cyan-400 h-3.5 animate-[pulse_0.5s_infinite_0.15s]" />
+                  {themeSongPlaying && (
+                    <div className="flex items-end space-x-0.5 h-3">
+                      <div className="w-0.5 bg-[#00E676] h-2 animate-[pulse_0.6s_infinite]" />
+                      <div className="w-0.5 bg-[#00E676] h-3 animate-[pulse_0.4s_infinite_0.1s]" />
+                      <div className="w-0.5 bg-[#00E676] h-1.5 animate-[pulse_0.8s_infinite_0.2s]" />
+                      <div className="w-0.5 bg-[#00E676] h-3.5 animate-[pulse_0.5s_infinite_0.15s]" />
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+
+              {/* Interactive Theme Song Audio Control Player */}
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.25 }}
+                className="w-72 md:w-80 bg-slate-900/90 border border-white/10 rounded-2xl p-4 flex flex-col items-center space-y-3 backdrop-blur-md shadow-lg"
+              >
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center space-x-2">
+                    <Music className={`w-4 h-4 ${themeSongPlaying ? "text-emerald-400 animate-pulse" : "text-slate-400"}`} />
+                    <span className="text-[10px] font-mono tracking-wider text-slate-300 font-medium">
+                      ХӨГЖМИЙН УДИРДЛАГА
+                    </span>
                   </div>
+                  
+                  {themeSongPlaying && (
+                    <div className="flex items-end space-x-0.5 h-3">
+                      <div className="w-0.5 bg-emerald-400 h-2 animate-[pulse_0.6s_infinite]" />
+                      <div className="w-0.5 bg-emerald-400 h-3 animate-[pulse_0.4s_infinite_0.1s]" />
+                      <div className="w-0.5 bg-emerald-400 h-1.5 animate-[pulse_0.8s_infinite_0.2s]" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center space-x-3 w-full">
+                  <button
+                    onClick={() => {
+                      triggerSound("click");
+                      toggleThemeSong();
+                    }}
+                    disabled={themeSongLoading}
+                    className={`flex-1 flex items-center justify-center space-x-2 py-2.5 px-4 rounded-xl font-bold text-xs tracking-wider uppercase transition-all duration-300 border cursor-pointer ${
+                      themeSongPlaying
+                        ? "bg-rose-500/10 hover:bg-rose-500/20 border-rose-500/20 text-rose-400 hover:text-rose-300"
+                        : "bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/20 text-emerald-400 hover:text-emerald-300"
+                    } disabled:opacity-50`}
+                  >
+                    {themeSongLoading ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                        <span>Уншиж байна...</span>
+                      </>
+                    ) : themeSongPlaying ? (
+                      <>
+                        <Pause size={14} />
+                        <span>Ая зогсоох</span>
+                      </>
+                    ) : (
+                      <>
+                        <Play size={14} />
+                        <span>Ая тоглуулах (Оригинал)</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </motion.div>
 
