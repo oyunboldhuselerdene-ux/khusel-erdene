@@ -1,5 +1,5 @@
 import { motion } from "motion/react";
-import { Home, Gamepad2, User2, Mail, Terminal, Bot } from "lucide-react";
+import { Home, Gamepad2, User2, Mail, Terminal, Bot, Keyboard } from "lucide-react";
 
 interface NavbarProps {
   currentSection: string;
@@ -13,6 +13,7 @@ export default function Navbar({ currentSection, onNavigate, onOpenIdolCoach }: 
     { id: "game", label: "Тоглоомын хэсэг", icon: Gamepad2 },
     { id: "about", label: "Миний тухай", icon: User2 },
     { id: "idol", label: "🤖 My Idol", icon: Bot, isAction: true },
+    { id: "typeracer", label: "⌨️ Typeracer", icon: Keyboard, isExternal: true, url: "https://togloom-gdgm.vercel.app/" },
     { id: "contact", label: "Холбоо барих", icon: Mail },
   ];
 
@@ -32,6 +33,8 @@ export default function Navbar({ currentSection, onNavigate, onOpenIdolCoach }: 
               onClick={() => {
                 if (item.isAction) {
                   onOpenIdolCoach();
+                } else if (item.isExternal && item.url) {
+                  window.open(item.url, "_blank", "noopener,noreferrer");
                 } else {
                   onNavigate(item.id);
                 }
@@ -56,7 +59,7 @@ export default function Navbar({ currentSection, onNavigate, onOpenIdolCoach }: 
               
               <span className="relative z-10 hidden sm:inline">{item.label}</span>
               <span className="relative z-10 sm:hidden">
-                {item.id === "home" ? "Нүүр" : item.id === "game" ? "Тоглоом" : item.id === "about" ? "Тухай" : item.id === "idol" ? "My Idol" : "Холбоо"}
+                {item.id === "home" ? "Нүүр" : item.id === "game" ? "Тоглоом" : item.id === "about" ? "Тухай" : item.id === "idol" ? "My Idol" : item.id === "typeracer" ? "Typeracer" : "Холбоо"}
               </span>
             </button>
           );

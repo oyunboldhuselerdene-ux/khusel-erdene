@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "LeaderboardEntry": {
+      "title": "LeaderboardEntry",
+      "description": "An entry in the anime guess leaderboard tracking scores and player words per minute (WPM).",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "The screen name of the player."
+        },
+        "score": {
+          "type": "integer",
+          "description": "The score achieved by the player."
+        },
+        "wpm": {
+          "type": "integer",
+          "description": "The typing speed / guess speed in words per minute."
+        },
+        "category": {
+          "type": "string",
+          "description": "The category of the quiz played."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "The timestamp when the score was recorded."
+        }
+      },
+      "required": ["name", "score", "wpm", "category", "timestamp"]
+    }
+  },
+  "firestore": {
+    "anime_guess/{entryId}": {
+      "schema": "LeaderboardEntry",
+      "description": "Leaderboard database storing high scores, WPM metrics, and user categories."
+    }
+  }
+}

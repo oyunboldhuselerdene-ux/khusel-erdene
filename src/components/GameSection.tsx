@@ -30,6 +30,16 @@ interface LeaderboardEntry {
   score: number;
   category: keyof GameData;
   timestamp: string;
+  answers?: AnswerHistoryItem[];
+}
+
+interface AnswerHistoryItem {
+  questionId: number;
+  emojis: string;
+  hint?: string;
+  correctAnswer: string;
+  userAnswer: string;
+  isCorrect: boolean;
 }
 
 const DEFAULT_LEADERBOARD: LeaderboardEntry[] = [];
@@ -38,7 +48,7 @@ const DEFAULT_LEADERBOARD: LeaderboardEntry[] = [];
 const ANIME_IMAGES: Record<string, string> = {
   "One Piece": "https://m.media-amazon.com/images/M/MV5BMTNjNGU4NTUtYmVjMy00YjRiLTkxMWUtNzZkMDNiYjZhNmViXkEyXkFqcGc@._V1_FMjpg_UX1000_.jpg", 
   "Naruto": "https://m.media-amazon.com/images/M/MV5BNTk3MDA1ZjAtNTRhYS00YzNiLTgwOGEtYWRmYTQ3NjA0NTAwXkEyXkFqcGc@._V1_FMjpg_UX1000_.jpg",
-  "Demon Slayer": "https://images.unsplash.com/photo-1618336753974-aae8e04506aa?w=600&auto=format&fit=crop&q=80",
+  "Demon Slayer": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcR_hTNQ_rE2dJaDCqH0kpdh6pJ3LlimBr29dVLZSzeRQqv4uAylxky62e-P&s=10",
   "Death Note": "https://m.media-amazon.com/images/M/MV5BYTgyZDhmMTEtZDFhNi00MTc4LTg3NjUtYWJlNGE5Mzk2NzMxXkEyXkFqcGc@._V1_QL75_UX190_CR0,2,190,281_.jpg",
   "Attack on Titan": "https://m.media-amazon.com/images/M/MV5BZjliODY5MzQtMmViZC00MTZmLWFhMWMtMjMwM2I3OGY1MTRiXkEyXkFqcGc@._V1_FMjpg_UX1000_.jpg",
   "Fullmetal Alchemist": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQCc85uII7t27diIuZbp0VQrWeHrea3SPlrsu7ik_AWkwsNqQfTLKxR9zXW&s=10",
@@ -392,14 +402,14 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
 
   const fetchSharedLeaderboard = async () => {
     try {
-      const response = await fetch("/api/leaderboard");
+      const response = await fetch("/api/scores");
       if (response.ok) {
         const data = await response.json();
         setLeaderboard(data);
         localStorage.setItem("anime_guess_leaderboard", JSON.stringify(data));
       }
     } catch (e) {
-      console.error("Could not fetch shared leaderboard", e);
+      console.error("Could not fetch shared leaderboard from /api/scores", e);
     }
   };
 
@@ -463,14 +473,18 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
   const [score, setScore] = useState<number>(0);
   const [lives, setLives] = useState<number>(5);
   const [timeLeft, setTimeLeft] = useState<number>(30);
+  const [gameStartTime, setGameStartTime] = useState<number>(0);
+  const [gameWpm, setGameWpm] = useState<number>(0);
   
   // Selected answer state
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [isAnswerCorrect, setIsAnswerCorrect] = useState<boolean | null>(null);
   const [isShaking, setIsShaking] = useState<boolean>(false);
   const [showPayoutOverlay, setShowPayoutOverlay] = useState<boolean>(false);
+  const [selectedLeaderboardEntry, setSelectedLeaderboardEntry] = useState<LeaderboardEntry | null>(null);
   
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const answersHistoryRef = useRef<AnswerHistoryItem[]>([]);
 
   // Sound helper wrapper
   const triggerSound = (type: "ding" | "buzz" | "click" | "win" | "lose") => {
@@ -534,6 +548,14 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
     const currentQ = currentQuestions[currentQuestionIndex];
     if (currentQ) {
       playAnimeTheme(currentQ.answer, soundEnabled);
+      answersHistoryRef.current.push({
+        questionId: currentQ.id,
+        emojis: currentQ.emojis,
+        hint: currentQ.hint,
+        correctAnswer: currentQ.answer,
+        userAnswer: "Хугацаа дууссан",
+        isCorrect: false
+      });
     }
 
     // Show correct answer visual payout
@@ -555,9 +577,12 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
     setScore(0);
     setLives(5);
     setTimeLeft(30);
+    setGameStartTime(Date.now());
+    setGameWpm(0);
     setSelectedAnswer(null);
     setIsAnswerCorrect(null);
     setShowPayoutOverlay(false);
+    answersHistoryRef.current = [];
     setActiveScreen("playing");
   };
 
@@ -573,6 +598,18 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
     // Calculate final score with perfect score +10 bonus
     const isPerfect = finalRawScore === 10;
     const computedScore = (isVictory && isPerfect) ? finalRawScore + 10 : finalRawScore;
+
+    // Calculate WPM based on gameplay speed
+    const elapsedMs = Date.now() - (gameStartTime || Date.now());
+    const elapsedMin = elapsedMs / 60000;
+    
+    // Assume each correct answer is about 1.6 words (8 characters).
+    // Standard WPM formula: WPM = (Total Characters typed/guessed / 5) / time in minutes.
+    const calculatedWpm = elapsedMin > 0.05 
+      ? Math.max(1, Math.round(((finalRawScore * 8) / 5) / elapsedMin)) 
+      : Math.round(((finalRawScore * 8) / 5) / 0.1); // default fallback if too fast
+    
+    setGameWpm(calculatedWpm);
 
     // 1. Update high scores
     setHighScores((prev) => {
@@ -599,24 +636,26 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
       return updated;
     });
 
-    // 4. Update leaderboard
+    // 4. Save to Firestore "scores" collection via server proxy
     const activeName = playerName.trim() || "Шинэ Тоглогч";
     const newEntry: LeaderboardEntry = {
       id: Math.random().toString(36).substring(2, 11),
       name: activeName,
       score: computedScore,
       category: selectedCategory,
-      timestamp: new Date().toLocaleDateString("mn-MN") + " " + new Date().toLocaleTimeString("mn-MN", { hour: "2-digit", minute: "2-digit" })
+      timestamp: new Date().toLocaleDateString("mn-MN") + " " + new Date().toLocaleTimeString("mn-MN", { hour: "2-digit", minute: "2-digit" }),
+      answers: answersHistoryRef.current
     };
 
-    fetch("/api/leaderboard", {
+    fetch("/api/scores", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         name: activeName,
         score: computedScore,
         category: selectedCategory,
-        timestamp: newEntry.timestamp
+        wpm: calculatedWpm,
+        answers: answersHistoryRef.current
       })
     })
       .then((res) => {
@@ -624,11 +663,13 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
         throw new Error("Server response not ok");
       })
       .then((data) => {
-        setLeaderboard(data);
-        localStorage.setItem("anime_guess_leaderboard", JSON.stringify(data));
+        console.log(`Saved score to Firestore "scores" collection successfully! ID: ${data.id}`);
+        // Fetch the updated leaderboard straight from Firestore scores collection
+        fetchSharedLeaderboard();
       })
       .catch((err) => {
-        console.error("Failed to sync leaderboard score with server:", err);
+        console.error("Failed to save score to Firestore:", err);
+        // Fallback local update
         setLeaderboard((prev) => {
           const combined = [...prev, newEntry];
           const sorted = combined.sort((a, b) => b.score - a.score);
@@ -673,6 +714,15 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
 
     // Play the specific anime's iconic synthesized theme song for both correct and incorrect guesses!
     playAnimeTheme(currentQ.answer, soundEnabled);
+
+    answersHistoryRef.current.push({
+      questionId: currentQ.id,
+      emojis: currentQ.emojis,
+      hint: currentQ.hint,
+      correctAnswer: currentQ.answer,
+      userAnswer: option,
+      isCorrect: isCorrect
+    });
 
     if (isCorrect) {
       setScore((p) => p + 1);
@@ -1028,11 +1078,16 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
                     return (
                       <div 
                         key={entry.id} 
-                        className={`flex items-center justify-between p-2 rounded-xl border text-[11px] transition-all duration-300 ${
+                        onClick={() => {
+                          setSelectedLeaderboardEntry(entry);
+                          triggerSound("click");
+                        }}
+                        className={`flex items-center justify-between p-2 rounded-xl border text-[11px] transition-all duration-300 cursor-pointer ${
                           isCurrentUser 
-                            ? "bg-purple-500/15 border-purple-500/40 text-purple-200 shadow-[0_0_10px_rgba(168,85,247,0.1)]" 
-                            : "bg-white/[0.01] border-white/5 hover:border-white/10"
+                            ? "bg-purple-500/15 border-purple-500/40 text-purple-200 shadow-[0_0_10px_rgba(168,85,247,0.1)] hover:bg-purple-500/20" 
+                            : "bg-white/[0.01] border-white/5 hover:border-white/20 hover:bg-white/[0.03]"
                         }`}
+                        title="Дэлгэрэнгүй хариултуудыг харах // View details"
                       >
                         <div className="flex items-center space-x-2 min-w-0">
                           <span className={`w-5 h-5 flex items-center justify-center font-mono text-[9px] rounded-full flex-shrink-0 ${
@@ -1426,10 +1481,45 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
           </p>
         </div>
 
-        <div className="bg-white/[0.02] border border-white/5 p-4 rounded-xl max-w-xs mx-auto">
-          <span className="text-slate-500 font-mono text-[10px]">ЦУГЛУУЛСАН ОНОО</span>
-          <div className="text-3xl font-mono font-bold text-amber-400 mt-1">{score}</div>
+        <div className="grid grid-cols-2 gap-3 max-w-xs mx-auto">
+          <div className="bg-white/[0.02] border border-white/5 p-3 rounded-xl">
+            <span className="text-slate-500 font-mono text-[10px]">ЦУГЛУУЛСАН ОНОО</span>
+            <div className="text-2xl font-mono font-bold text-amber-400 mt-1">{score}</div>
+          </div>
+          <div className="bg-white/[0.02] border border-white/5 p-3 rounded-xl">
+            <span className="text-slate-500 font-mono text-[10px]">WPM (ХУРД)</span>
+            <div className="text-2xl font-mono font-bold text-teal-400 mt-1">{gameWpm}</div>
+          </div>
         </div>
+
+        {/* Answers History Section */}
+        {answersHistoryRef.current.length > 0 && (
+          <div className="text-left border-t border-white/10 pt-4">
+            <h4 className="text-[10px] font-mono font-bold text-slate-400 mb-2 tracking-wider uppercase">ТАЙЛБАР & ХАРИУЛТУУДЫН ТҮҮХ // ANSWERS HISTORY</h4>
+            <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+              {answersHistoryRef.current.map((item, idx) => (
+                <div key={idx} className="flex items-center justify-between p-2.5 bg-white/[0.02] border border-white/5 rounded-xl text-xs">
+                  <div className="flex items-center space-x-3 min-w-0">
+                    <span className="text-2xl select-none">{item.emojis}</span>
+                    <div className="min-w-0">
+                      <span className="text-slate-200 font-medium block truncate">{item.correctAnswer}</span>
+                      <span className="text-[10px] text-slate-500 block truncate">
+                        Таны хариулт: <span className={item.isCorrect ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"}>{item.userAnswer}</span>
+                      </span>
+                    </div>
+                  </div>
+                  <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                    item.isCorrect 
+                      ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                      : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                  }`}>
+                    {item.isCorrect ? "ЗӨВ" : "БУРУУ"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
           <button 
@@ -1494,16 +1584,49 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 max-w-xs mx-auto">
+          <div className="grid grid-cols-3 gap-3 max-w-sm mx-auto">
             <div className="bg-white/[0.02] border border-white/5 p-3 rounded-xl">
               <span className="text-slate-500 font-mono text-[9px]">ЗӨВ ХАРИУЛТ</span>
-              <div className="text-xl font-mono font-bold text-white mt-0.5">{score} / 10</div>
+              <div className="text-base font-mono font-bold text-white mt-0.5">{score} / 10</div>
             </div>
             <div className="bg-white/[0.02] border border-purple-400/10 p-3 rounded-xl shadow-cyber-glow">
               <span className="text-slate-500 font-mono text-[9px]">НИЙТ ОНОО</span>
-              <div className="text-xl font-mono font-bold text-purple-400 mt-0.5">{finalScore}</div>
+              <div className="text-base font-mono font-bold text-purple-400 mt-0.5">{finalScore}</div>
+            </div>
+            <div className="bg-white/[0.02] border border-white/5 p-3 rounded-xl">
+              <span className="text-slate-500 font-mono text-[9px]">WPM (ХУРД)</span>
+              <div className="text-base font-mono font-bold text-teal-400 mt-0.5">{gameWpm}</div>
             </div>
           </div>
+
+          {/* Answers History Section */}
+          {answersHistoryRef.current.length > 0 && (
+            <div className="text-left border-t border-white/10 pt-4">
+              <h4 className="text-[10px] font-mono font-bold text-slate-400 mb-2 tracking-wider uppercase">ТАЙЛБАР & ХАРИУЛТУУДЫН ТҮҮХ // ANSWERS HISTORY</h4>
+              <div className="space-y-2 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
+                {answersHistoryRef.current.map((item, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-2.5 bg-white/[0.02] border border-white/5 rounded-xl text-xs">
+                    <div className="flex items-center space-x-3 min-w-0">
+                      <span className="text-2xl select-none">{item.emojis}</span>
+                      <div className="min-w-0">
+                        <span className="text-slate-200 font-medium block truncate">{item.correctAnswer}</span>
+                        <span className="text-[10px] text-slate-500 block truncate">
+                          Таны хариулт: <span className={item.isCorrect ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"}>{item.userAnswer}</span>
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                      item.isCorrect 
+                        ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                        : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                    }`}>
+                      {item.isCorrect ? "ЗӨВ" : "БУРУУ"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col sm:flex-row gap-3 justify-center pt-4">
             <button 
@@ -1637,6 +1760,84 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
                   className="flex-1 py-3.5 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 disabled:opacity-40 text-white rounded-2xl font-bold text-xs tracking-widest uppercase transition-all duration-300 shadow-[0_4px_15px_rgba(168,85,247,0.3)] hover:scale-[1.01] cursor-pointer text-center"
                 >
                   ЭХЛЭХ // PLAY ➔
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* High-fidelity Score Details Modal overlay */}
+      <AnimatePresence>
+        {selectedLeaderboardEntry && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4 z-50"
+          >
+            <motion.div
+              initial={{ scale: 0.95, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.95, y: 20 }}
+              transition={{ type: "spring", duration: 0.3 }}
+              className="bg-slate-900 border border-purple-500/30 rounded-3xl p-6 md:p-8 max-w-lg w-full space-y-6 shadow-[0_0_50px_rgba(168,85,247,0.35)] relative overflow-hidden"
+            >
+              {/* Decorative grid backdrop */}
+              <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff02_1px,transparent_1px),linear-gradient(to_bottom,#ffffff03_1px,transparent_1px)] bg-[size:16px_16px] pointer-events-none" />
+              <div className="absolute -top-12 -right-12 w-32 h-32 bg-purple-500/10 rounded-full blur-2xl pointer-events-none" />
+
+              <div className="space-y-2 relative z-10">
+                <span className="text-purple-400 font-mono text-[9px] font-bold tracking-widest uppercase">
+                  ТОГЛОГЧИЙН ХАРИУЛТУУДЫН ДЭЛГЭРЭНГҮЙ
+                </span>
+                <h3 className="font-sans text-xl font-extrabold text-white tracking-tight flex items-center gap-2">
+                  <Trophy className="text-amber-400" size={20} />
+                  <span>{selectedLeaderboardEntry.name}-ийн оноо</span>
+                </h3>
+                <p className="text-slate-400 font-sans text-xs">
+                  Ангилал: <strong className="text-purple-300">{categoryTitles[selectedLeaderboardEntry.category] || "Таавар"}</strong> | Нийт оноо: <strong className="text-amber-400">{selectedLeaderboardEntry.score}</strong> | Огноо: <span className="text-slate-500">{selectedLeaderboardEntry.timestamp}</span>
+                </p>
+              </div>
+
+              <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar relative z-10">
+                {!selectedLeaderboardEntry.answers || selectedLeaderboardEntry.answers.length === 0 ? (
+                  <div className="text-center py-10 text-slate-500 text-xs font-sans">
+                    <p>ℹ️ Энэ тоглогчийн дэлгэрэнгүй хариултын түүх байхгүй байна.</p>
+                  </div>
+                ) : (
+                  selectedLeaderboardEntry.answers.map((item: any, idx: number) => (
+                    <div key={idx} className="flex items-center justify-between p-2.5 bg-white/[0.02] border border-white/5 rounded-xl text-xs">
+                      <div className="flex items-center space-x-3 min-w-0">
+                        <span className="text-2xl select-none">{item.emojis}</span>
+                        <div className="min-w-0">
+                          <span className="text-slate-200 font-semibold block truncate">{item.correctAnswer}</span>
+                          <span className="text-[10px] text-slate-500 block truncate">
+                            Хариулсан: <span className={item.isCorrect ? "text-emerald-400 font-semibold" : "text-rose-400 font-semibold"}>{item.userAnswer}</span>
+                          </span>
+                        </div>
+                      </div>
+                      <span className={`px-2 py-0.5 rounded-full text-[9px] font-bold ${
+                        item.isCorrect 
+                          ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20" 
+                          : "bg-rose-500/10 text-rose-400 border border-rose-500/20"
+                      }`}>
+                        {item.isCorrect ? "ЗӨВ" : "БУРУУ"}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="relative z-10 pt-2">
+                <button
+                  onClick={() => {
+                    triggerSound("click");
+                    setSelectedLeaderboardEntry(null);
+                  }}
+                  className="w-full py-3 bg-purple-600/20 hover:bg-purple-600 text-purple-200 hover:text-black rounded-2xl font-bold text-xs tracking-widest uppercase transition-all duration-300 border border-purple-500/20 cursor-pointer text-center"
+                >
+                  ХААХ // CLOSE
                 </button>
               </div>
             </motion.div>

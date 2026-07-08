@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
 import { createServer as createViteServer } from "vite";
+import { Firestore, FieldValue } from "@google-cloud/firestore";
 
 dotenv.config();
 
@@ -30,6 +31,26 @@ function writeLeaderboard(data: any[]) {
 }
 
 let cachedLeaderboard: any[] = readLeaderboard().sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+
+// Safely initialize Firebase Firestore Admin on the server side using the config file or ADC
+const firebaseConfigPath = path.join(process.cwd(), "firebase-applet-config.json");
+let firestoreDb: any = null;
+
+try {
+  if (fs.existsSync(firebaseConfigPath)) {
+    const config = JSON.parse(fs.readFileSync(firebaseConfigPath, "utf-8"));
+    firestoreDb = new Firestore({
+      projectId: config.projectId,
+      databaseId: config.firestoreDatabaseId || "(default)",
+    });
+    console.log(`Google Cloud Firestore Server SDK initialized with databaseId: ${config.firestoreDatabaseId || "(default)"}!`);
+  } else {
+    firestoreDb = new Firestore();
+    console.warn("firebase-applet-config.json was not found. Initialized Firestore with ADC.");
+  }
+} catch (error) {
+  console.error("Error initializing Google Cloud Firestore Server SDK:", error);
+}
 
 async function startServer() {
   const app = express();
@@ -208,6 +229,147 @@ async function startServer() {
     } catch (error) {
       console.error("Error resetting leaderboard:", error);
       res.status(500).json({ error: "Failed to reset leaderboard" });
+    }
+  });
+
+  // POST: Save to Firestore "anime_guess" collection (name + WPM + score + category)
+  app.post("/api/firestore-save", async (req, res) => {
+    try {
+      const { name, wpm, score, category } = req.body;
+      if (!name) {
+        return res.status(400).json({ error: "Name is required" });
+      }
+
+      if (!firestoreDb) {
+        console.warn("Firestore is not initialized yet.");
+        return res.status(503).json({ error: "Firestore database is not ready or initialized" });
+      }
+
+      const cleanName = String(name).trim().substring(0, 16);
+      const cleanWpm = Number(wpm) || 0;
+      const cleanScore = Number(score) || 0;
+      const cleanCategory = String(category || "emojiQuiz");
+
+      const docRef = await firestoreDb.collection("anime_guess").add({
+        name: cleanName,
+        wpm: cleanWpm,
+        score: cleanScore,
+        category: cleanCategory,
+        timestamp: FieldValue.serverTimestamp()
+      });
+
+      console.log(`Saved entry to "anime_guess" Firestore. Doc ID: ${docRef.id}`);
+      return res.json({ success: true, id: docRef.id });
+    } catch (error: any) {
+      console.error("Error saving entry to Firestore:", error);
+      return res.status(500).json({ error: error.message || "Failed to save entry to Firestore" });
+    }
+  });
+
+  // POST: Save score to Firestore "scores" collection
+  app.post("/api/scores", async (req, res) => {
+    try {
+      const { name, score, category, wpm, answers } = req.body;
+      if (!name || score === undefined) {
+        return res.status(400).json({ error: "Name and score are required" });
+      }
+
+      if (!firestoreDb) {
+        console.warn("Firestore is not initialized.");
+        return res.status(503).json({ error: "Firestore database is not ready" });
+      }
+
+      const cleanName = String(name).trim().substring(0, 16);
+      const cleanScore = Number(score) || 0;
+      const cleanWpm = Number(wpm) || 0;
+      const cleanCategory = String(category || "emojiQuiz");
+      const cleanAnswers = Array.isArray(answers) ? answers : [];
+
+      const docRef = await firestoreDb.collection("scores").add({
+        name: cleanName,
+        score: cleanScore,
+        wpm: cleanWpm,
+        category: cleanCategory,
+        answers: cleanAnswers,
+        timestamp: FieldValue.serverTimestamp()
+      });
+
+      console.log(`Saved score to Firestore "scores" collection. ID: ${docRef.id}`);
+      return res.json({ success: true, id: docRef.id });
+    } catch (error: any) {
+      console.error("Error saving score to Firestore:", error);
+      return res.status(500).json({ error: error.message || "Failed to save score" });
+    }
+  });
+
+  // GET: Retrieve scores from Firestore "scores" collection
+  app.get("/api/scores", async (req, res) => {
+    try {
+      if (!firestoreDb) {
+        console.warn("Firestore is not initialized.");
+        return res.status(503).json({ error: "Firestore database is not ready" });
+      }
+
+      // Try with ordering first
+      try {
+        const snapshot = await firestoreDb.collection("scores")
+          .orderBy("score", "desc")
+          .limit(30)
+          .get();
+
+        const list: any[] = [];
+        snapshot.forEach((doc: any) => {
+          const data = doc.data();
+          let formattedDate = new Date().toLocaleString("mn-MN");
+          if (data.timestamp) {
+            try {
+              const date = data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp);
+              formattedDate = date.toLocaleDateString("mn-MN") + " " + date.toLocaleTimeString("mn-MN", { hour: "2-digit", minute: "2-digit" });
+            } catch (e) {
+              console.error("Error formatting timestamp:", e);
+            }
+          }
+          list.push({
+            id: doc.id,
+            name: data.name,
+            score: data.score,
+            wpm: data.wpm,
+            category: data.category,
+            answers: data.answers || [],
+            timestamp: formattedDate
+          });
+        });
+        return res.json(list);
+      } catch (orderError: any) {
+        console.warn("Query with order failed, falling back to unordered fetch and sort:", orderError.message || orderError);
+        // Fallback: If no index is created yet or ordered query fails, return unordered scores
+        const snapshot = await firestoreDb.collection("scores").limit(100).get();
+        const list: any[] = [];
+        snapshot.forEach((doc: any) => {
+          const data = doc.data();
+          let formattedDate = new Date().toLocaleString("mn-MN");
+          if (data.timestamp) {
+            try {
+              const date = data.timestamp.toDate ? data.timestamp.toDate() : new Date(data.timestamp);
+              formattedDate = date.toLocaleDateString("mn-MN") + " " + date.toLocaleTimeString("mn-MN", { hour: "2-digit", minute: "2-digit" });
+            } catch (e) {}
+          }
+          list.push({
+            id: doc.id,
+            name: data.name,
+            score: data.score,
+            wpm: data.wpm,
+            category: data.category,
+            answers: data.answers || [],
+            timestamp: formattedDate
+          });
+        });
+        list.sort((a, b) => b.score - a.score);
+        return res.json(list.slice(0, 30));
+      }
+    } catch (error: any) {
+      console.error("Error fetching scores from Firestore:", error);
+      return res.status(500).json({ error: error.message || "Failed to fetch scores" });
     }
   });
 
