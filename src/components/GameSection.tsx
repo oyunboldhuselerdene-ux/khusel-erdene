@@ -413,9 +413,22 @@ export default function GameSection({ onNavigate }: GameSectionProps) {
     }
   };
 
-  // Fetch shared leaderboard on active screen changes (e.g. entering home/launcher screen)
+  // Fetch shared leaderboard on active screen changes and poll in background when on launcher/anime-modes
   useEffect(() => {
     fetchSharedLeaderboard();
+
+    let intervalId: NodeJS.Timeout | null = null;
+    if (activeScreen === "launcher" || activeScreen === "anime-modes") {
+      intervalId = setInterval(() => {
+        fetchSharedLeaderboard();
+      }, 5000); // refresh every 5 seconds to get real-time scores from other devices!
+    }
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
   }, [activeScreen]);
 
   // Load stats from localStorage on mount
