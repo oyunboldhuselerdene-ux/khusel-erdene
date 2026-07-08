@@ -493,7 +493,7 @@ async function startServer() {
     try {
       if (restClient.isReady) {
         try {
-          const results = await restClient.runQuery("scores", "score", "DESCENDING", 30);
+          const results = await restClient.runQuery("scores", "score", "DESCENDING", 10);
           const list: any[] = [];
           for (const data of results) {
             let formattedDate = new Date().toLocaleString("mn-MN");
@@ -537,7 +537,7 @@ async function startServer() {
         timestamp: entry.timestamp || new Date().toLocaleString("mn-MN")
       }));
       formattedList.sort((a: any, b: any) => b.score - a.score);
-      return res.json(formattedList.slice(0, 30));
+      return res.json(formattedList.slice(0, 10));
     } catch (fallbackErr: any) {
       console.error("Local fallback leaderboard fetch failed:", fallbackErr);
       return res.status(500).json({ error: "Failed to fetch scores" });
